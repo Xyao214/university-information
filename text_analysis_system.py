@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 文本分析系统 - 集多格式文本导入、中文分词、停用词过滤、词频统计、词云可视化于一体
-系统要求：Windows 11, PyCharm Community Edition 2024.3.3
-依赖库：jieba, wordcloud, pillow, python-docx, PyPDF2, numpy, matplotlib
+开发环境：Windows 11, PyCharm Community Edition 2024.3.3
+界面布局：左侧操作区 - 右侧整合显示区（文本、词频、词云同屏显示）
+风格：白色科幻主题
 """
 
 import os
 import re
-import io
 import sys
 import threading
 import tkinter as tk
@@ -16,18 +16,47 @@ from collections import Counter
 from typing import List, Dict, Tuple, Optional
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 import jieba
 import wordcloud
 from wordcloud import WordCloud, ImageColorGenerator
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib import colors as mcolors
 
-# ============================================================
+# ========================================
+# 全局样式常量 - 白色科幻风格
+# ========================================
+STYLE = {
+    "MAIN_BG": "#ffffff",
+    "LEFT_BG": "#f8faff",
+    "RIGHT_BG": "#ffffff",
+    "FRAME_BG": "#f0f5ff",
+    "TITLE_BG": "#f0f5ff",
+    "TITLE_FG": "#0f172a",
+    "ACCENT_PRIMARY": "#0ea5e9",
+    "ACCENT_SECONDARY": "#8b5cf6",
+    "ACCENT_HIGHLIGHT": "#06b6d4",
+    "ACCENT_GLOW": "#60a5fa",
+    "TEXT_PRIMARY": "#0f172a",
+    "TEXT_SECONDARY": "#475569",
+    "TEXT_MUTED": "#94a3b8",
+    "BORDER_COLOR": "#e2e8f0",
+    "BORDER_LIGHT": "#f1f5f9",
+    "BUTTON_BG": "#0f172a",
+    "BUTTON_FG": "#ffffff",
+    "BUTTON_HOVER": "#1e293b",
+    "BUTTON_PRIMARY_BG": "#0ea5e9",
+    "BUTTON_PRIMARY_HOVER": "#0284c7",
+    "BUTTON_ACCENT_BG": "#8b5cf6",
+    "BUTTON_ACCENT_HOVER": "#7c3aed",
+    "INPUT_BG": "#ffffff",
+    "PANEL_SHADOW": "",
+    "SCROLL_BG": "#cbd5e1",
+    "CARD_BG": "#ffffff",
+    "CARD_BORDER": "#e2e8f0",
+}
+
+# ========================================
 # 内置常用中文停用词表
-# ============================================================
+# ========================================
 BUILTIN_STOP_WORDS: set = {
     "的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都", "一",
     "一个", "上", "也", "很", "到", "说", "要", "去", "你", "会", "着",
@@ -41,21 +70,15 @@ BUILTIN_STOP_WORDS: set = {
     "那样", "因为", "所以", "如果", "虽然", "但是", "然而", "于是", "因此",
     "然后", "接着", "最后", "首先", "其次", "另外", "此外", "并且", "而且",
     "不过", "只是", "只有", "只要", "只能", "不可", "不用", "不能", "不会",
-    "不断", "不仅", "不管", "不论", "不是", "不同", "不如", "不然", "不如",
-    "不过", "不要", "不仅", "不管", "不论", "不是", "不同", "不如", "不然",
-    "不如", "不过", "不要", "东西", "事情", "问题", "时候", "地方", "方面",
-    "些", "啊", "吧", "吗", "呢", "哦", "嗯", "呀", "哪", "哇", "哈",
+    "不断", "不仅", "不管", "不论", "不是", "不同", "不如", "不然",
+    "不要", "东西", "事情", "问题", "时候", "地方", "方面",
+    "啊", "吧", "吗", "呢", "哦", "嗯", "呀", "哪", "哇", "哈",
     "么", "嘛", "哎", "唉", "喂", "啦", "噢", "哟", "咳", "哼", "呵",
     "来", "去", "做", "干", "搞", "弄", "给", "让", "叫", "拿", "打",
-    "走", "跑", "吃", "喝", "看", "听", "想", "说", "写", "读", "用",
-}
-# 补充更多常用停用词
-BUILTIN_STOP_WORDS.update({
     "其中", "其他", "所有", "有些", "许多", "各个", "各种", "每", "某",
     "二", "三", "四", "五", "六", "七", "八", "九", "十", "百", "千", "万",
-    "第", "次", "回", "种", "类", "样", "点", "些", "边", "面", "头",
-    "里", "外", "中", "内", "前", "后", "左", "右", "上", "下",
-    "大", "小", "多", "少", "高", "低", "长", "短", "新", "旧",
+    "第", "次", "回", "种", "类", "样", "点", "边", "面", "头",
+    "里", "外", "中", "内", "大", "小", "多", "少", "高", "低", "长", "短", "新", "旧",
     "年", "月", "日", "时", "分", "秒", "今", "明", "昨", "现",
     "很", "太", "更", "最", "极", "较", "非常", "十分", "特别",
     "通过", "根据", "按照", "经过", "对于", "关于", "由于", "为了",
@@ -63,1573 +86,1072 @@ BUILTIN_STOP_WORDS.update({
     "提供", "表示", "发生", "产生", "出现", "发展", "形成", "建立",
     "具有", "存在", "影响", "作用", "关系", "条件", "情况", "结果",
     "过程", "方式", "方法", "方面", "程度", "范围", "部分", "内容",
-    "目前", "现在", "以前", "以后", "以前", "当时", "之前", "之后",
-    "以来", "以上", "以下", "以内", "以外", "之间", "之中", "之内",
-})
-
-
-# ============================================================
-# 10组预设颜色方案
-# ============================================================
-PRESET_COLOR_SCHEMES: Dict[str, List[str]] = {
-    "海洋蓝调": ["#003f5c", "#2f4b7c", "#665191", "#a05195", "#d45087",
-                "#f95d6a", "#ff7c43", "#ffa600"],
-    "日落暖橙": ["#ff6b6b", "#ff8e72", "#ffa272", "#ffb672", "#ffca72",
-                "#ffde72", "#ffe972", "#fff272"],
-    "森林绿意": ["#1b4332", "#2d6a4f", "#40916c", "#52b788", "#74c69d",
-                "#95d5b2", "#b7e4c7", "#d8f3dc"],
-    "薰衣草紫": ["#3c096c", "#5a189a", "#7b2cbf", "#9d4edd", "#c77dff",
-                "#e0aaff", "#e3d5ff", "#f2e8ff"],
-    "烈焰红": ["#641220", "#6e1423", "#85182a", "#a11d33", "#a71e34",
-              "#bd1f36", "#c71f37", "#da1e37"],
-    "极光梦幻": ["#0b132b", "#1c2541", "#3a506b", "#5bc0be", "#6fffe9",
-                "#80ffdb", "#72efdd", "#4ea8de"],
-    "蜜桃粉彩": ["#ffcdb2", "#ffb4a2", "#e5989b", "#b5838d", "#6d6875",
-                "#ffc8dd", "#ffafcc", "#bde0fe"],
-    "霓虹都市": ["#f72585", "#b5179e", "#7209b7", "#560bad", "#480ca8",
-                "#3a0ca3", "#3f37c9", "#4361ee"],
-    "大地棕调": ["#ede0d4", "#e6ccb2", "#ddb892", "#b08968", "#7f5539",
-                "#9c6644", "#b07d62", "#ceb5a7"],
-    "冰霜银白": ["#e0fbfc", "#c2dfe3", "#9db4c0", "#5c6b73", "#253237",
-                "#98c1d9", "#6b9ac4", "#3b5998"],
+    "目前", "现在", "以前", "以后", "当时", "之前", "之后", "以来",
+    "以上", "以下", "以内", "以外", "之间", "之中", "之内",
 }
 
+# ========================================
+# 10组预设颜色方案（要求：10组）
+# ========================================
+PRESET_COLORS: Dict[str, List[str]] = {
+    "冰川蓝": ["#f0f9ff", "#e0f2fe", "#bae6fd", "#7dd3fc", "#38bdf8", "#0ea5e9", "#0284c7", "#0369a1"],
+    "霓虹紫": ["#f5f3ff", "#ede9fe", "#ddd6fe", "#c4b5fd", "#a78bfa", "#8b5cf6", "#7c3aed", "#6d28d9"],
+    "极光绿": ["#f0fdf4", "#dcfce7", "#bbf7d0", "#86efac", "#4ade80", "#22c55e", "#16a34a", "#15803d"],
+    "落日橙": ["#fff7ed", "#ffedd5", "#fed7aa", "#fdba74", "#fb923c", "#f97316", "#ea580c", "#c2410c"],
+    "玫瑰粉": ["#fdf2f8", "#fce7f3", "#fbcfe8", "#f9a8d4", "#f472b6", "#ec4899", "#db2777", "#be185d"],
+    "暗夜": ["#f8fafc", "#f1f5f9", "#e2e8f0", "#cbd5e1", "#94a3b8", "#64748b", "#475569", "#0f172a"],
+    "森林": ["#f0fdf0", "#e6f4ea", "#cce7d1", "#a3c9a8", "#75a085", "#588157", "#3a5a40", "#1b4332"],
+    "日落": ["#fff1e6", "#ffd6a5", "#fdffb6", "#caffbf", "#9bf6ff", "#a0c4ff", "#bdb2ff", "#ffc6ff"],
+    "钢铁灰": ["#f8fafc", "#f1f5f9", "#e2e8f0", "#cbd5e1", "#94a3b8", "#64748b", "#475569", "#1e293b"],
+    "彩虹": ["#ef4444", "#f97316", "#f59e0b", "#84cc16", "#10b981", "#06b6d4", "#3b82f6", "#8b5cf6"],
+}
 
-# ============================================================
-# 10个预设形状名称及对应的生成函数
-# ============================================================
-def _generate_circle_mask(size: int = 500) -> np.ndarray:
-    """生成圆形掩码"""
+# ========================================
+# 10个预设形状（要求：10个）
+# ========================================
+def shape_circle(size: int = 512) -> np.ndarray:
     img = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(img)
-    margin = 10
-    draw.ellipse([margin, margin, size - margin, size - margin], fill=255)
+    margin = 8
+    draw.ellipse((margin, margin, size - margin, size - margin), fill=255)
+    img = img.filter(ImageFilter.GaussianBlur(1))
     return np.array(img)
 
-
-def _generate_heart_mask(size: int = 500) -> np.ndarray:
-    """生成心形掩码"""
+def shape_heart(size: int = 512) -> np.ndarray:
     img = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(img)
-    margin = 20
-    w, h = size - 2 * margin, size - 2 * margin
-    # 使用多边形近似心形
-    cx, cy = size / 2, size / 2
+    cx, cy = size // 2, size // 2
+    scale = size / 36
     points = []
     for i in range(360):
         t = np.radians(i)
-        # 心形参数方程
         x = 16 * (np.sin(t) ** 3)
         y = 13 * np.cos(t) - 5 * np.cos(2 * t) - 2 * np.cos(3 * t) - np.cos(4 * t)
-        scale = min(w, h) / 34.0
-        px = cx + x * scale
-        py = cy - y * scale
+        px = int(cx + x * scale)
+        py = int(cy - y * scale)
         points.append((px, py))
     draw.polygon(points, fill=255)
-    # 应用模糊使边缘平滑
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    img = img.filter(ImageFilter.GaussianBlur(2))
     return np.array(img)
 
-
-def _generate_star_mask(size: int = 500) -> np.ndarray:
-    """生成五角星掩码"""
+def shape_star(size: int = 512) -> np.ndarray:
     img = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(img)
-    cx, cy = size / 2, size / 2
-    outer_r = size / 2 - 15
-    inner_r = outer_r * 0.4
+    cx, cy = size // 2, size // 2
+    outer = size // 2 - 10
+    inner = outer * 0.4
     points = []
     for i in range(10):
         angle = np.radians(i * 36 - 90)
-        r = outer_r if i % 2 == 0 else inner_r
-        px = cx + r * np.cos(angle)
-        py = cy + r * np.sin(angle)
+        r = outer if i % 2 == 0 else inner
+        px = int(cx + r * np.cos(angle))
+        py = int(cy + r * np.sin(angle))
         points.append((px, py))
     draw.polygon(points, fill=255)
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    img = img.filter(ImageFilter.GaussianBlur(1))
     return np.array(img)
 
-
-def _generate_diamond_mask(size: int = 500) -> np.ndarray:
-    """生成菱形掩码"""
+def shape_cloud(size: int = 512) -> np.ndarray:
     img = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(img)
-    margin = 20
-    cx, cy = size / 2, size / 2
-    r = size / 2 - margin
+    cx, cy = size // 2, size // 2
+    circles = [
+        (cx - 90, cy + 20, 70), (cx - 30, cy - 30, 80), (cx + 70, cy + 10, 75),
+        (cx + 130, cy + 40, 55), (cx + 20, cy + 60, 65), (cx - 60, cy + 70, 50),
+        (cx + 50, cy - 50, 45), (cx, cy, 85)
+    ]
+    for x, y, r in circles:
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=255)
+    img = img.filter(ImageFilter.GaussianBlur(3))
+    return np.array(img)
+
+def shape_diamond(size: int = 512) -> np.ndarray:
+    img = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(img)
+    cx, cy = size // 2, size // 2
+    r = size // 2 - 20
     points = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
     draw.polygon(points, fill=255)
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    img = img.filter(ImageFilter.GaussianBlur(1))
     return np.array(img)
 
-
-def _generate_cloud_mask(size: int = 500) -> np.ndarray:
-    """生成云朵形掩码（通过多个圆形叠加）"""
+def shape_triangle(size: int = 512) -> np.ndarray:
     img = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(img)
-    margin = 30
-    cx, cy = size / 2, size / 2
-    # 绘制重叠的圆形成云朵形状
-    circles = [
-        (cx - 80, cy + 20, 60),
-        (cx - 20, cy - 20, 70),
-        (cx + 60, cy + 10, 65),
-        (cx + 120, cy + 40, 50),
-        (cx + 20, cy + 50, 55),
-        (cx - 50, cy + 60, 45),
-        (cx + 40, cy - 40, 40),
-        (cx, cy, 75),
-    ]
-    for (x, y, r) in circles:
-        draw.ellipse([int(x - r), int(y - r), int(x + r), int(y + r)], fill=255)
-    img = img.filter(ImageFilter.GaussianBlur(radius=3))
-    return np.array(img)
-
-
-def _generate_triangle_mask(size: int = 500) -> np.ndarray:
-    """生成三角形掩码"""
-    img = Image.new("L", (size, size), 0)
-    draw = ImageDraw.Draw(img)
-    margin = 20
-    cx, cy = size / 2, size / 2
-    r = size / 2 - margin
+    cx, cy = size // 2, size // 2
+    r = size // 2 - 20
     points = [(cx, cy - r), (cx + r * 0.866, cy + r * 0.5), (cx - r * 0.866, cy + r * 0.5)]
     draw.polygon(points, fill=255)
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    img = img.filter(ImageFilter.GaussianBlur(1))
     return np.array(img)
 
-
-def _generate_hexagon_mask(size: int = 500) -> np.ndarray:
-    """生成六边形掩码"""
+def shape_hexagon(size: int = 512) -> np.ndarray:
     img = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(img)
-    cx, cy = size / 2, size / 2
-    r = size / 2 - 15
+    cx, cy = size // 2, size // 2
+    r = size // 2 - 15
     points = []
     for i in range(6):
         angle = np.radians(i * 60 - 90)
-        px = cx + r * np.cos(angle)
-        py = cy + r * np.sin(angle)
+        px = int(cx + r * np.cos(angle))
+        py = int(cy + r * np.sin(angle))
         points.append((px, py))
     draw.polygon(points, fill=255)
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    img = img.filter(ImageFilter.GaussianBlur(1))
     return np.array(img)
 
-
-def _generate_ellipse_mask(size: int = 500) -> np.ndarray:
-    """生成椭圆形掩码"""
+def shape_oval(size: int = 512) -> np.ndarray:
     img = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(img)
     margin = 10
-    draw.ellipse([margin, margin + 50, size - margin, size - margin - 50], fill=255)
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    draw.ellipse((margin, margin + 60, size - margin, size - margin - 60), fill=255)
+    img = img.filter(ImageFilter.GaussianBlur(1))
     return np.array(img)
 
-
-def _generate_rounded_rect_mask(size: int = 500) -> np.ndarray:
-    """生成圆角矩形掩码"""
-    img = Image.new("L", (size, size), 0)
-    draw = ImageDraw.Draw(img)
-    margin = 20
-    radius = 60
-    draw.rounded_rectangle(
-        [margin, margin, size - margin, size - margin],
-        radius=radius, fill=255
-    )
-    img = img.filter(ImageFilter.GaussianBlur(radius=1))
-    return np.array(img)
-
-
-def _generate_speech_bubble_mask(size: int = 500) -> np.ndarray:
-    """生成对话气泡形掩码"""
+def shape_bubble(size: int = 512) -> np.ndarray:
     img = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(img)
     margin = 25
-    tail_h = 60
-    tail_w = 50
-    # 主体圆角矩形
-    body_rect = [margin, margin, size - margin, size - margin - tail_h - 10]
-    draw.rounded_rectangle(body_rect, radius=50, fill=255)
-    # 尾部三角形
-    tail_points = [
-        (size / 2 - tail_w / 2, size - margin - tail_h - 10),
-        (size / 2 + tail_w / 2, size - margin - tail_h - 10),
-        (size / 2, size - margin),
-    ]
-    draw.polygon(tail_points, fill=255)
-    img = img.filter(ImageFilter.GaussianBlur(radius=2))
+    tail_h, tail_w = 70, 60
+    draw.rounded_rectangle(
+        (margin, margin, size - margin, size - margin - tail_h - 10),
+        radius=60, fill=255
+    )
+    cx = size // 2
+    tail = [(cx - tail_w // 2, size - margin - tail_h - 10),
+            (cx + tail_w // 2, size - margin - tail_h - 10),
+            (cx, size - margin)]
+    draw.polygon(tail, fill=255)
+    img = img.filter(ImageFilter.GaussianBlur(2))
     return np.array(img)
 
+def shape_rounded_rect(size: int = 512) -> np.ndarray:
+    img = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(img)
+    margin = 25
+    draw.rounded_rectangle((margin, margin, size - margin, size - margin), radius=50, fill=255)
+    img = img.filter(ImageFilter.GaussianBlur(1))
+    return np.array(img)
 
-# 形状名称到生成函数的映射
-SHAPE_GENERATORS: Dict[str, callable] = {
-    "圆形": _generate_circle_mask,
-    "心形": _generate_heart_mask,
-    "五角星": _generate_star_mask,
-    "菱形": _generate_diamond_mask,
-    "云朵": _generate_cloud_mask,
-    "三角形": _generate_triangle_mask,
-    "六边形": _generate_hexagon_mask,
-    "椭圆形": _generate_ellipse_mask,
-    "圆角矩形": _generate_rounded_rect_mask,
-    "对话气泡": _generate_speech_bubble_mask,
+SHAPES: Dict[str, callable] = {
+    "圆形": shape_circle,
+    "心形": shape_heart,
+    "五角星": shape_star,
+    "云朵": shape_cloud,
+    "菱形": shape_diamond,
+    "三角形": shape_triangle,
+    "六边形": shape_hexagon,
+    "椭圆形": shape_oval,
+    "对话气泡": shape_bubble,
+    "圆角矩形": shape_rounded_rect,
 }
 
-
-# ============================================================
-# 文本分析器
-# ============================================================
+# ========================================
+# 文本分析核心类
+# ========================================
 class TextAnalyzer:
-    """文本分析器：负责文本导入、分词、停用词过滤、词频统计"""
-
     def __init__(self):
-        self._raw_text: str = ""
-        self._words: List[str] = []
-        self._word_freq: Counter = Counter()
-        self._stop_words: set = BUILTIN_STOP_WORDS.copy()
-        self._custom_stop_words: set = set()
+        self.raw_text = ""
+        self.words = []
+        self.word_counts = Counter()
+        self._stop_words = BUILTIN_STOP_WORDS.copy()
+        self.custom_stop_words = set()
 
-    # ---------- 停用词管理 ----------
     @property
-    def stop_words(self) -> set:
-        return self._stop_words | self._custom_stop_words
+    def all_stop_words(self):
+        return self._stop_words | self.custom_stop_words
 
-    def add_stop_words(self, words: List[str]) -> None:
+    def add_custom_stops(self, words: List[str]):
         for w in words:
             w = w.strip()
             if w:
-                self._custom_stop_words.add(w)
+                self.custom_stop_words.add(w)
 
-    def remove_stop_words(self, words: List[str]) -> None:
+    def remove_custom_stops(self, words: List[str]):
         for w in words:
-            w = w.strip()
-            self._custom_stop_words.discard(w)
-            self._stop_words.discard(w)
+            self.custom_stop_words.discard(w.strip())
 
-    def get_stop_words_list(self) -> List[str]:
-        return sorted(self.stop_words)
+    def reset_stops(self):
+        self.custom_stop_words.clear()
 
-    def get_custom_stop_words_list(self) -> List[str]:
-        return sorted(self._custom_stop_words)
-
-    # ---------- 文本导入 ----------
     @staticmethod
-    def _read_txt(file_path: str) -> str:
+    def _read_txt(path: str) -> str:
         encodings = ["utf-8", "gbk", "gb2312", "utf-16", "latin-1"]
         for enc in encodings:
             try:
-                with open(file_path, "r", encoding=enc) as f:
+                with open(path, "r", encoding=enc) as f:
                     return f.read()
-            except (UnicodeDecodeError, UnicodeError):
+            except UnicodeDecodeError:
                 continue
-        raise ValueError("无法识别的文本编码，已尝试 utf-8 / gbk / gb2312 / utf-16 / latin-1")
+        raise ValueError("无法识别文本编码，请确认文件为UTF-8或GBK格式")
 
     @staticmethod
-    def _read_docx(file_path: str) -> str:
-        try:
-            from docx import Document
-        except ImportError:
-            raise ImportError("请安装 python-docx 库：pip install python-docx")
-        doc = Document(file_path)
+    def _read_docx(path: str) -> str:
+        from docx import Document
+        doc = Document(path)
         return "\n".join(p.text for p in doc.paragraphs)
 
     @staticmethod
-    def _read_pdf(file_path: str) -> str:
-        # 优先使用 PyPDF2
-        try:
-            from PyPDF2 import PdfReader
-        except ImportError:
-            raise ImportError("请安装 PyPDF2 库：pip install PyPDF2")
-
-        reader = PdfReader(file_path)
-        text_parts = []
+    def _read_pdf(path: str) -> str:
+        from PyPDF2 import PdfReader
+        reader = PdfReader(path)
+        text = []
         for page in reader.pages:
             t = page.extract_text()
             if t:
-                text_parts.append(t)
-        result = "\n".join(text_parts).strip()
-
-        # 如果 PyPDF2 提取效果不好，尝试 pdfplumber
-        if not result or len(result) < 20:
+                text.append(t)
+        result = "\n".join(text).strip()
+        if not result:
             try:
                 import pdfplumber
-                with pdfplumber.open(file_path) as pdf:
-                    parts = []
+                with pdfplumber.open(path) as pdf:
+                    text = []
                     for page in pdf.pages:
                         t = page.extract_text()
                         if t:
-                            parts.append(t)
-                    result2 = "\n".join(parts).strip()
-                    if len(result2) > len(result):
-                        result = result2
+                            text.append(t)
+                    result = "\n".join(text).strip()
             except ImportError:
                 pass
-
         if not result:
-            raise ValueError("无法从PDF中提取文本内容，PDF可能为扫描件或图片型PDF")
+            raise ValueError("无法提取PDF文本，文件可能为扫描件")
         return result
 
-    def load_file(self, file_path: str) -> str:
-        """导入文件并返回文本内容"""
-        ext = os.path.splitext(file_path)[1].lower()
+    def load_file(self, path: str) -> str:
+        ext = os.path.splitext(path)[1].lower()
         if ext == ".txt":
-            text = self._read_txt(file_path)
+            self.raw_text = self._read_txt(path)
         elif ext == ".docx":
-            text = self._read_docx(file_path)
+            self.raw_text = self._read_docx(path)
         elif ext == ".pdf":
-            text = self._read_pdf(file_path)
+            self.raw_text = self._read_pdf(path)
         else:
-            raise ValueError(f"不支持的文件格式：{ext}，仅支持 .txt / .docx / .pdf")
-        self._raw_text = text
-        return text
+            raise ValueError(f"不支持的格式 {ext}，仅支持 .txt .docx .pdf")
+        return self.raw_text
 
-    # ---------- 分词 ----------
-    def segment(self, text: str = None) -> List[str]:
-        """中文分词，去除停用词"""
-        if text is not None:
-            self._raw_text = text
-        if not self._raw_text:
-            self._words = []
-            self._word_freq = Counter()
+    def process(self) -> List[str]:
+        if not self.raw_text:
             return []
-
-        # 使用 jieba 精确模式分词
-        words = jieba.lcut(self._raw_text)
-        sw = self.stop_words
-
-        # 过滤：至少2个字符，非纯数字/标点，非停用词，包含中文或字母
+        words = jieba.lcut(self.raw_text)
+        stops = self.all_stop_words
         filtered = []
         for w in words:
             w = w.strip()
             if len(w) < 2:
                 continue
-            if w in sw:
+            if w in stops:
                 continue
-            # 保留包含中文、英文或数字的词汇
-            if re.search(r'[\u4e00-\u9fff\uff00-\uffefa-zA-Z0-9]', w):
+            if re.search(r'[\u4e00-\u9ffa-zA-Z0-9]', w):
                 filtered.append(w)
-
-        self._words = filtered
-        self._word_freq = Counter(filtered)
+        self.words = filtered
+        self.word_counts = Counter(filtered)
         return filtered
 
-    # ---------- 词频统计 ----------
-    def get_word_frequency(self, top_n: int = None) -> List[Tuple[str, int]]:
-        """获取按频率降序排列的词频列表"""
-        items = self._word_freq.most_common()
-        if top_n is not None:
-            items = items[:top_n]
-        return items
-
-    @property
-    def raw_text(self) -> str:
-        return self._raw_text
+    def get_top_words(self, n: int = 100) -> List[Tuple[str, int]]:
+        return self.word_counts.most_common(n)
 
     @property
     def total_words(self) -> int:
-        return len(self._words)
+        return len(self.words)
 
     @property
     def unique_words(self) -> int:
-        return len(self._word_freq)
+        return len(self.word_counts)
 
-
-# ============================================================
+# ========================================
 # 词云生成器
-# ============================================================
-class WordCloudGenerator:
-    """词云生成器：负责词云生成、形状处理、颜色配置、导出"""
-
+# ========================================
+class WordCloudEngine:
     def __init__(self):
-        self._wordcloud: Optional[WordCloud] = None
-        self._mask_image: Optional[np.ndarray] = None
-        self._current_shape: Optional[str] = None
-        self._current_color_scheme: Optional[str] = None
-        self._custom_mask_data: Optional[np.ndarray] = None
-        self._use_image_colors: bool = False
+        self.mask: Optional[np.ndarray] = None
+        self.color_image: Optional[np.ndarray] = None
+        self.current_shape: str = ""
+        self.current_colors: str = ""
+        self.use_image_colors: bool = False
+        self.wc: Optional[WordCloud] = None
 
-    # ---------- 形状掩码 ----------
-    def set_preset_shape(self, shape_name: str, size: int = 500) -> np.ndarray:
-        """设置预设形状"""
-        if shape_name not in SHAPE_GENERATORS:
-            raise ValueError(f"未知形状：{shape_name}")
-        self._current_shape = shape_name
-        self._custom_mask_data = None
-        self._use_image_colors = False
-        mask = SHAPE_GENERATORS[shape_name](size)
-        self._mask_image = mask
-        return mask
+    def set_preset_shape(self, name: str, size: int = 512) -> np.ndarray:
+        if name not in SHAPES:
+            raise ValueError(f"未知形状 {name}")
+        self.mask = SHAPES[name](size)
+        self.current_shape = name
+        self.color_image = None
+        self.use_image_colors = False
+        return self.mask
 
-    def load_custom_mask(self, image_path: str, size: int = 500) -> np.ndarray:
-        """从图片加载自定义掩码"""
-        img = Image.open(image_path).convert("L")
-        img = img.resize((size, size), Image.LANCZOS)
-        # 二值化处理
-        threshold = 128
-        img = img.point(lambda p: 255 if p > threshold else 0)
-        mask = np.array(img)
-        self._mask_image = mask
-        self._custom_mask_data = mask
-        self._current_shape = "自定义"
-        return mask
+    def load_mask_from_image(self, path: str, size: int = 512) -> np.ndarray:
+        img = Image.open(path).convert("L")
+        img = img.resize((size, size), Image.Resampling.LANCZOS)
+        img = img.point(lambda p: 255 if p > 128 else 0)
+        self.mask = np.array(img)
+        self.current_shape = f"自定义: {os.path.basename(path)}"
+        self.use_image_colors = False
+        return self.mask
 
-    def load_custom_color_image(self, image_path: str, size: int = 500) -> np.ndarray:
-        """加载自定义图片用于颜色提取和掩码"""
-        img_color = Image.open(image_path).convert("RGB")
-        img_color = img_color.resize((size, size), Image.LANCZOS)
-        img_gray = img_color.convert("L")
-        threshold = 128
-        img_gray = img_gray.point(lambda p: 255 if p > threshold else 0)
-        mask = np.array(img_gray)
-        self._mask_image = mask
-        self._custom_mask_data = mask
-        self._current_shape = "自定义图片"
-        self._use_image_colors = True
-        self._color_image = np.array(img_color)
-        return mask
+    def load_mask_and_colors(self, path: str, size: int = 512) -> np.ndarray:
+        img_rgb = Image.open(path).convert("RGB")
+        img_rgb = img_rgb.resize((size, size), Image.Resampling.LANCZOS)
+        img_gray = img_rgb.convert("L")
+        img_gray = img_gray.point(lambda p: 255 if p > 128 else 0)
+        self.mask = np.array(img_gray)
+        self.color_image = np.array(img_rgb)
+        self.current_shape = f"图片颜色: {os.path.basename(path)}"
+        self.use_image_colors = True
+        return self.mask
 
-    # ---------- 颜色方案 ----------
-    @staticmethod
-    def get_color_func(scheme_name: str):
-        """根据颜色方案名称返回颜色函数"""
-        if scheme_name in PRESET_COLOR_SCHEMES:
-            colors = PRESET_COLOR_SCHEMES[scheme_name]
-
-            def color_func(word, font_size, position, orientation, random_state=None, **kwargs):
+    def get_color_function(self, scheme_name: str):
+        if self.use_image_colors and self.color_image is not None:
+            return ImageColorGenerator(self.color_image)
+        if scheme_name in PRESET_COLORS:
+            colors = PRESET_COLORS[scheme_name]
+            def _func(word, *args, **kwargs):
                 idx = hash(word) % len(colors)
                 return colors[idx]
+            return _func
+        def _default(word, *args, **kwargs):
+            return "#0f172a"
+        return _default
 
-            return color_func
-
-        # matplotlib 内置 colormaps
-        matplotlib_cmaps = [
-            "viridis", "plasma", "inferno", "magma", "cividis",
-            "twilight", "twilight_shifted", "turbo",
-            "Blues", "Greens", "Oranges", "Reds", "Purples",
-            "YlOrBr", "YlOrRd", "OrRd", "PuRd", "RdPu", "BuPu",
-            "GnBu", "PuBu", "YlGnBu", "PuBuGn", "BuGn", "YlGn",
-            "binary", "gist_yarg", "gist_gray", "gray", "bone",
-            "pink", "spring", "summer", "autumn", "winter", "cool",
-            "Wistia", "hot", "afmhot", "gist_heat", "copper",
-        ]
-        if scheme_name in matplotlib_cmaps:
-            cmap = plt.get_cmap(scheme_name)
-
-            def color_func(word, font_size, position, orientation, random_state=None, **kwargs):
-                rng = np.random.RandomState(hash(word) % (2 ** 32))
-                return mcolors.rgb2hex(cmap(rng.random()))
-
-            return color_func
-
-        # 默认使用 viridis
-        cmap = plt.get_cmap("viridis")
-
-        def default_func(word, font_size, position, orientation, random_state=None, **kwargs):
-            rng = np.random.RandomState(hash(word) % (2 ** 32))
-            return mcolors.rgb2hex(cmap(rng.random()))
-
-        return default_func
-
-    def set_color_scheme(self, scheme_name: str) -> None:
-        self._current_color_scheme = scheme_name
-
-    def use_custom_colors(self, color_list: List[str]) -> None:
-        """使用用户自定义颜色列表"""
-        self._current_color_scheme = "__custom__"
-        self._custom_colors = color_list
-
-    # ---------- 生成词云 ----------
-    def generate(
-        self,
-        word_freq: dict,
-        width: int = 800,
-        height: int = 600,
-        font_path: str = None,
-        background_color: str = "white",
-        max_words: int = 200,
-        max_font_size: int = None,
-        min_font_size: int = 8,
-        collocations: bool = False,
-    ) -> WordCloud:
-        """生成词云"""
-        mask = self._mask_image
-
-        # 设置字体
-        if font_path is None:
-            # 尝试常见的系统中文字体路径
-            candidates = [
-                "C:/Windows/Fonts/simhei.ttf",
-                "C:/Windows/Fonts/msyh.ttc",
-                "C:/Windows/Fonts/simsun.ttc",
-                "C:/Windows/Fonts/STKAITI.TTF",
-                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-            ]
-            for fp in candidates:
-                if os.path.exists(fp):
-                    font_path = fp
-                    break
-            if font_path is None:
-                font_path = "C:/Windows/Fonts/simhei.ttf"  # fallback
-
-        # 确定颜色函数
-        if self._use_image_colors and hasattr(self, '_color_image') and self._color_image is not None:
-            color_func = ImageColorGenerator(self._color_image)
-        else:
-            color_func = self.get_color_func(self._current_color_scheme or "viridis")
-
+    def generate(self, freq: Dict[str, int], width: int = 800, height: int = 600,
+                 bg: str = "white", max_words: int = 200) -> WordCloud:
+        font_path = self._find_font()
+        color_func = self.get_color_function(self.current_colors)
         wc = WordCloud(
-            width=width,
-            height=height,
+            width=width, height=height,
             font_path=font_path,
-            background_color=background_color,
-            mask=mask,
+            background_color=bg,
+            mask=self.mask,
             max_words=max_words,
-            max_font_size=max_font_size,
-            min_font_size=min_font_size,
+            max_font_size=None,
+            min_font_size=8,
             color_func=color_func,
-            collocations=collocations,
+            collocations=False,
             random_state=42,
-            prefer_horizontal=0.7,
+            prefer_horizontal=0.7
         )
-        wc.generate_from_frequencies(word_freq)
-        self._wordcloud = wc
+        wc.generate_from_frequencies(freq)
+        self.wc = wc
         return wc
 
-    # ---------- 导出 ----------
-    def export_image(self, file_path: str) -> None:
-        """导出词云为图片"""
-        if self._wordcloud is None:
-            raise ValueError("请先生成词云")
-        ext = os.path.splitext(file_path)[1].lower()
-        if ext not in (".png", ".jpg", ".jpeg"):
-            file_path += ".png"
+    def _find_font(self) -> str:
+        candidates = [
+            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/simhei.ttf",
+            "C:/Windows/Fonts/simsun.ttc",
+            "C:/Windows/Fonts/STKAITI.TTF",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        ]
+        for p in candidates:
+            if os.path.exists(p):
+                return p
+        return "C:/Windows/Fonts/msyh.ttc"
 
-        # 使用 PIL 保存，wordcloud 直接提供了 to_image 方法
-        img = self._wordcloud.to_image()
-        # 如果掩码是自定义导入的且使用了图片颜色，保留透明背景
-        img.save(file_path, quality=95)
-        self._export_path = file_path
+    def save(self, path: str):
+        if self.wc is None:
+            raise ValueError("未生成词云")
+        img = self.wc.to_image()
+        img.save(path, quality=95)
 
-    def export_array(self) -> np.ndarray:
-        """获取词云图像的 numpy 数组"""
-        if self._wordcloud is None:
-            raise ValueError("请先生成词云")
-        return np.array(self._wordcloud.to_image())
+    def to_image(self) -> Image.Image:
+        if self.wc is None:
+            raise ValueError("未生成词云")
+        return self.wc.to_image()
 
-    @property
-    def wordcloud_obj(self) -> Optional[WordCloud]:
-        return self._wordcloud
-
-
-# ============================================================
-# 主 GUI 应用程序
-# ============================================================
+# ========================================
+# 主GUI应用
+# ========================================
 class TextAnalysisApp:
-    """文本分析系统 GUI 主程序 —— 白色科幻风格"""
-
-    # ---------- 配色常量（白色科幻风格）----------
-    BG_MAIN = "#ffffff"
-    BG_LEFT = "#f5f7fa"
-    BG_RIGHT = "#ffffff"
-    BG_TITLE = "#1a1a2e"
-    ACCENT_PRIMARY = "#0f3460"
-    ACCENT_SECONDARY = "#16213e"
-    ACCENT_HIGHLIGHT = "#e94560"
-    TEXT_PRIMARY = "#1a1a2e"
-    TEXT_SECONDARY = "#4a4a6a"
-    TEXT_LIGHT = "#7a7a9a"
-    BORDER_COLOR = "#e0e4e8"
-    BUTTON_BG = "#16213e"
-    BUTTON_FG = "#ffffff"
-    BUTTON_HOVER = "#0f3460"
-    INPUT_BG = "#ffffff"
-    PANEL_BG = "#f8f9fb"
-    TABLE_BG = "#ffffff"
-    TABLE_HEADER_BG = "#16213e"
-    TABLE_HEADER_FG = "#ffffff"
-    TABLE_ROW_ALT = "#f5f7fa"
-    SCROLL_BG = "#e0e4e8"
-
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("文本分析系统 - TextLens")
-        self.root.geometry("1400x850")
+    def __init__(self, root: tk.Tk):
+        self.root = root
+        self.root.title("TextLens · 中文文本分析系统")
+        self.root.geometry("1440x820")
         self.root.minsize(1200, 700)
-        self.root.configure(bg=self.BG_MAIN)
+        self.root.configure(bg=STYLE["MAIN_BG"])
 
-        # 初始化模块
         self.analyzer = TextAnalyzer()
-        self.generator = WordCloudGenerator()
+        self.generator = WordCloudEngine()
 
-        # 状态变量
-        self.current_file_path: Optional[str] = None
-        self.current_preview_image: Optional[Image.Image] = None
+        # 状态
+        self.current_file = None
+        self.tk_preview = None
+        self.is_processing = False
 
-        # 构建界面
         self._build_ui()
+        self._setup_styles()
 
-        # 设置默认形状和颜色
-        self.generator.set_preset_shape("圆形")
-        self.generator.set_color_scheme("海洋蓝调")
+        # 默认选择
         self.shape_var.set("圆形")
-        self.color_var.set("海洋蓝调")
+        self.color_var.set("冰川蓝")
+        self.generator.set_preset_shape("圆形")
+        self.generator.current_colors = "冰川蓝"
 
-        # 显示初始提示
-        self._show_welcome()
-
-    # ============================================================
-    # UI 构建
-    # ============================================================
-    def _build_ui(self) -> None:
-        """构建整体界面"""
-        # 顶部标题栏
-        self._build_title_bar()
-
-        # 主内容区（左操作区 + 右显示区）
-        self.main_paned = tk.PanedWindow(
-            self.root, orient=tk.HORIZONTAL,
-            bg=self.BORDER_COLOR, sashwidth=2, sashrelief=tk.FLAT
-        )
-        self.main_paned.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
-
-        # 左侧操作面板
-        self.left_frame = self._build_left_panel()
-        # 右侧显示面板
-        self.right_frame = self._build_right_panel()
-
-        self.main_paned.add(self.left_frame, minsize=380, width=400)
-        self.main_paned.add(self.right_frame, minsize=600, width=800)
-
-        # 底部状态栏
-        self._build_status_bar()
-
-        # 设置 ttk 样式
-        self._setup_ttk_styles()
-
-    def _build_title_bar(self) -> None:
-        """顶部标题栏"""
-        title_frame = tk.Frame(self.root, bg=self.BG_TITLE, height=52)
-        title_frame.pack(fill=tk.X, side=tk.TOP)
-        title_frame.pack_propagate(False)
-
-        title_label = tk.Label(
-            title_frame,
-            text="TEXTLENS · 文本分析系统",
-            font=("Microsoft YaHei UI", 16, "bold"),
-            fg="#ffffff",
-            bg=self.BG_TITLE,
-        )
-        title_label.pack(side=tk.LEFT, padx=24, pady=10)
-
-        subtitle_label = tk.Label(
-            title_frame,
-            text="多格式导入 · 中文分词 · 词频统计 · 词云可视化",
-            font=("Microsoft YaHei UI", 9),
-            fg="#8899aa",
-            bg=self.BG_TITLE,
-        )
-        subtitle_label.pack(side=tk.LEFT, padx=10, pady=15)
-
-    def _setup_ttk_styles(self) -> None:
-        """配置 ttk 样式"""
+    def _setup_styles(self):
         style = ttk.Style()
         style.theme_use("clam")
-
-        # 配置各个组件样式
         style.configure(
-            "TNotebook",
-            background=self.BG_MAIN,
-            borderwidth=0,
+            "TNotebook", background=STYLE["RIGHT_BG"],
+            borderwidth=0, tabmargins=[2, 5, 0, 0]
         )
         style.configure(
-            "TNotebook.Tab",
-            background=self.PANEL_BG,
-            foreground=self.TEXT_SECONDARY,
-            padding=[18, 8],
-            font=("Microsoft YaHei UI", 10),
-            borderwidth=0,
+            "TNotebook.Tab", background=STYLE["FRAME_BG"],
+            foreground=STYLE["TEXT_SECONDARY"],
+            padding=[16, 6], font=("Microsoft YaHei UI", 10),
         )
         style.map(
             "TNotebook.Tab",
-            background=[("selected", self.BG_MAIN)],
-            foreground=[("selected", self.ACCENT_PRIMARY)],
-            expand=[("selected", [0, 0, 0, 0])],
+            background=[("selected", STYLE["MAIN_BG"])],
+            foreground=[("selected", STYLE["ACCENT_PRIMARY"])],
         )
-
         style.configure(
             "Treeview",
-            background=self.TABLE_BG,
-            foreground=self.TEXT_PRIMARY,
-            rowheight=28,
-            fieldbackground=self.TABLE_BG,
-            borderwidth=0,
+            background=STYLE["CARD_BG"],
+            foreground=STYLE["TEXT_PRIMARY"],
+            rowheight=26,
+            fieldbackground=STYLE["CARD_BG"],
             font=("Microsoft YaHei UI", 9),
         )
         style.configure(
             "Treeview.Heading",
-            background=self.TABLE_HEADER_BG,
-            foreground=self.TABLE_HEADER_FG,
+            background=STYLE["BUTTON_BG"],
+            foreground=STYLE["BUTTON_FG"],
             font=("Microsoft YaHei UI", 9, "bold"),
-            borderwidth=0,
-            padding=[8, 4],
-        )
-        style.map(
-            "Treeview.Heading",
-            background=[("active", self.ACCENT_PRIMARY)],
-        )
-
-        style.configure(
-            "TLabelframe",
-            background=self.BG_LEFT,
-            borderwidth=0,
         )
         style.configure(
-            "TLabelframe.Label",
-            background=self.BG_LEFT,
-            foreground=self.TEXT_PRIMARY,
-            font=("Microsoft YaHei UI", 10, "bold"),
+            "TLabelframe", background=STYLE["LEFT_BG"], borderwidth=0
         )
-
         style.configure(
-            "TCombobox",
-            padding=[8, 4],
-            font=("Microsoft YaHei UI", 9),
+            "TLabelframe.Label", background=STYLE["LEFT_BG"],
+            foreground=STYLE["TEXT_PRIMARY"],
+            font=("Microsoft YaHei UI", 10, "bold")
+        )
+        style.configure(
+            "TProgressbar", troughcolor=STYLE["FRAME_BG"],
+            background=STYLE["ACCENT_PRIMARY"], borderwidth=0
         )
 
-    def _create_section_label(self, parent: tk.Widget, text: str) -> tk.Frame:
-        """创建区域分隔标题"""
-        frame = tk.Frame(parent, bg=self.BG_LEFT, height=32)
-        frame.pack(fill=tk.X, pady=(12, 4), padx=10)
-
-        indicator = tk.Frame(frame, bg=self.ACCENT_HIGHLIGHT, width=3, height=18)
+    def _create_card(self, parent, title):
+        frame = tk.Frame(parent, bg=STYLE["LEFT_BG"], padx=12, pady=8)
+        frame.pack(fill=tk.X, pady=(0, 8))
+        header = tk.Frame(frame, bg=STYLE["LEFT_BG"])
+        header.pack(fill=tk.X, pady=(0, 6))
+        indicator = tk.Frame(header, bg=STYLE["ACCENT_PRIMARY"], width=4, height=18)
         indicator.pack(side=tk.LEFT, padx=(0, 8))
-
         label = tk.Label(
-            frame,
-            text=text,
+            header, text=title,
             font=("Microsoft YaHei UI", 11, "bold"),
-            fg=self.TEXT_PRIMARY,
-            bg=self.BG_LEFT,
+            fg=STYLE["TEXT_PRIMARY"], bg=STYLE["LEFT_BG"]
         )
         label.pack(side=tk.LEFT)
         return frame
 
-    def _create_styled_button(
-        self, parent: tk.Widget, text: str, command,
-        width: int = None, accent: bool = False
-    ) -> tk.Button:
-        """创建统一样式的按钮"""
-        bg = self.ACCENT_HIGHLIGHT if accent else self.BUTTON_BG
-        fg = "#ffffff"
-
+    def _btn_primary(self, parent, text, command, **kwargs):
         btn = tk.Button(
             parent, text=text, command=command,
             font=("Microsoft YaHei UI", 9, "bold"),
-            bg=bg, fg=fg,
-            activebackground=self.ACCENT_PRIMARY,
-            activeforeground="#ffffff",
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=16, pady=6,
-            borderwidth=0,
-            highlightthickness=0,
+            bg=STYLE["BUTTON_PRIMARY_BG"], fg=STYLE["BUTTON_FG"],
+            activebackground=STYLE["BUTTON_PRIMARY_HOVER"],
+            activeforeground=STYLE["BUTTON_FG"],
+            relief=tk.FLAT, cursor="hand2",
+            padx=16, pady=7, borderwidth=0, highlightthickness=0, **kwargs
         )
-        if width:
-            btn.configure(width=width)
-
-        # 悬停效果
-        def on_enter(e):
-            btn.configure(bg=self.ACCENT_PRIMARY)
-
-        def on_leave(e):
-            btn.configure(bg=bg)
-
-        btn.bind("<Enter>", on_enter)
-        btn.bind("<Leave>", on_leave)
+        def _enter(e):
+            if not btn["state"] == tk.DISABLED:
+                btn.config(bg=STYLE["BUTTON_PRIMARY_HOVER"])
+        def _leave(e):
+            if not btn["state"] == tk.DISABLED:
+                btn.config(bg=STYLE["BUTTON_PRIMARY_BG"])
+        btn.bind("<Enter>", _enter)
+        btn.bind("<Leave>", _leave)
         return btn
 
-    # ============================================================
-    # 左侧操作面板
-    # ============================================================
+    def _btn_secondary(self, parent, text, command, **kwargs):
+        btn = tk.Button(
+            parent, text=text, command=command,
+            font=("Microsoft YaHei UI", 9, "bold"),
+            bg=STYLE["BUTTON_BG"], fg=STYLE["BUTTON_FG"],
+            activebackground=STYLE["BUTTON_HOVER"],
+            activeforeground=STYLE["BUTTON_FG"],
+            relief=tk.FLAT, cursor="hand2",
+            padx=16, pady=7, borderwidth=0, highlightthickness=0, **kwargs
+        )
+        def _enter(e):
+            if not btn["state"] == tk.DISABLED:
+                btn.config(bg=STYLE["BUTTON_HOVER"])
+        def _leave(e):
+            if not btn["state"] == tk.DISABLED:
+                btn.config(bg=STYLE["BUTTON_BG"])
+        btn.bind("<Enter>", _enter)
+        btn.bind("<Leave>", _leave)
+        return btn
+
+    def _build_ui(self):
+        # 顶部标题栏
+        self._build_top_bar()
+
+        # 主区域 - 左侧操作栏 + 右侧整合显示区
+        main = tk.PanedWindow(
+            self.root, orient=tk.HORIZONTAL,
+            bg=STYLE["BORDER_COLOR"], sashwidth=1,
+            sashrelief=tk.FLAT
+        )
+        main.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
+
+        left_panel = self._build_left_panel()
+        right_panel = self._build_right_panel()
+
+        main.add(left_panel, minsize=360, width=380)
+        main.add(right_panel, minsize=800, width=1000)
+
+        # 底部状态栏
+        self._build_status_bar()
+
+    def _build_top_bar(self):
+        bar = tk.Frame(self.root, bg=STYLE["TITLE_BG"], height=56)
+        bar.pack(fill=tk.X, side=tk.TOP)
+        bar.pack_propagate(False)
+        title = tk.Label(
+            bar, text="⚡ TEXTLENS",
+            font=("Microsoft YaHei UI", 18, "bold"),
+            fg=STYLE["TITLE_FG"], bg=STYLE["TITLE_BG"]
+        )
+        title.pack(side=tk.LEFT, padx=24, pady=10)
+        subtitle = tk.Label(
+            bar, text="中文文本分析 · 词频统计 · 词云可视化",
+            font=("Microsoft YaHei UI", 10),
+            fg=STYLE["TEXT_SECONDARY"], bg=STYLE["TITLE_BG"]
+        )
+        subtitle.pack(side=tk.LEFT, padx=16, pady=18)
+
     def _build_left_panel(self) -> tk.Frame:
-        """构建左侧操作面板"""
-        left = tk.Frame(self.root, bg=self.BG_LEFT, width=400)
-
-        # Canvas + Scrollbar 实现滚动
-        canvas = tk.Canvas(left, bg=self.BG_LEFT, highlightthickness=0)
-        scrollbar = tk.Scrollbar(left, orient=tk.VERTICAL, command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg=self.BG_LEFT)
-
-        scrollable_frame.bind(
+        left = tk.Frame(self.root, bg=STYLE["LEFT_BG"], width=380)
+        canvas = tk.Canvas(left, bg=STYLE["LEFT_BG"], highlightthickness=0)
+        scroll = tk.Scrollbar(left, orient=tk.VERTICAL, command=canvas.yview)
+        self.left_content = tk.Frame(canvas, bg=STYLE["LEFT_BG"])
+        self.left_content.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
-
-        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        def on_canvas_configure(event):
-            canvas.itemconfig(canvas_window, width=event.width)
-
-        canvas.bind("<Configure>", on_canvas_configure)
-
-        # 鼠标滚轮支持
-        def on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        canvas.bind_all("<MouseWheel>", on_mousewheel)
-
+        canvas.create_window((0, 0), window=self.left_content, anchor="nw")
+        canvas.configure(yscrollcommand=scroll.set)
+        def _resize(e):
+            canvas.itemconfig(canvas.find_withtag("all")[0], width=e.width)
+        canvas.bind("<Configure>", _resize)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        left.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-e.delta/120), "units"))
 
-        # --- 区块 1: 文件导入 ---
-        self._create_section_label(scrollable_frame, "📁 文件导入")
-        import_frame = tk.Frame(scrollable_frame, bg=self.BG_LEFT, padx=10)
-        import_frame.pack(fill=tk.X)
-
-        btn_frame = tk.Frame(import_frame, bg=self.BG_LEFT)
-        btn_frame.pack(fill=tk.X, pady=(2, 6))
-
-        self.btn_open = self._create_styled_button(
-            btn_frame, "打开文件", self._on_open_file, accent=True
-        )
+        # 1. 文件导入
+        card = self._create_card(self.left_content, "📁 文本导入")
+        btn_row = tk.Frame(card, bg=STYLE["LEFT_BG"])
+        btn_row.pack(fill=tk.X, pady=(2, 6))
+        self.btn_open = self._btn_primary(btn_row, "打开文件", self._on_open_file, width=12)
         self.btn_open.pack(side=tk.LEFT, padx=(0, 6))
-
-        self.btn_clear = self._create_styled_button(
-            btn_frame, "清空文本", self._on_clear_text
-        )
+        self.btn_clear = self._btn_secondary(btn_row, "清空重置", self._on_clear, width=10)
         self.btn_clear.pack(side=tk.LEFT)
-
-        self.file_path_var = tk.StringVar(value="未选择文件")
-        file_label = tk.Label(
-            import_frame,
-            textvariable=self.file_path_var,
+        self.file_label = tk.Label(
+            card, text="未选择文件",
             font=("Microsoft YaHei UI", 8),
-            fg=self.TEXT_LIGHT,
-            bg=self.BG_LEFT,
-            anchor="w",
-            wraplength=350,
+            fg=STYLE["TEXT_MUTED"], bg=STYLE["LEFT_BG"],
+            anchor="w", wraplength=330
         )
-        file_label.pack(fill=tk.X, pady=(0, 4))
+        self.file_label.pack(fill=tk.X)
 
-        # --- 区块 2: 分析与分词 ---
-        self._create_section_label(scrollable_frame, "🔍 分析与分词")
-        analysis_frame = tk.Frame(scrollable_frame, bg=self.BG_LEFT, padx=10)
-        analysis_frame.pack(fill=tk.X)
-
-        self.btn_analyze = self._create_styled_button(
-            analysis_frame, "开始分析", self._on_analyze, accent=True
-        )
-        self.btn_analyze.pack(fill=tk.X, pady=(2, 4))
-
-        # 分析参数
-        param_frame = tk.Frame(analysis_frame, bg=self.BG_LEFT)
-        param_frame.pack(fill=tk.X, pady=(0, 4))
-
+        # 2. 分词分析
+        card = self._create_card(self.left_content, "🔍 分词分析")
+        param_row = tk.Frame(card, bg=STYLE["LEFT_BG"])
+        param_row.pack(fill=tk.X, pady=(2, 6))
         tk.Label(
-            param_frame, text="显示词数:", bg=self.BG_LEFT,
-            fg=self.TEXT_SECONDARY, font=("Microsoft YaHei UI", 9)
+            param_row, text="显示词数:",
+            font=("Microsoft YaHei UI", 9),
+            fg=STYLE["TEXT_SECONDARY"], bg=STYLE["LEFT_BG"]
         ).pack(side=tk.LEFT)
         self.top_n_var = tk.StringVar(value="100")
-        top_n_entry = tk.Entry(
-            param_frame, textvariable=self.top_n_var,
+        entry = tk.Entry(
+            param_row, textvariable=self.top_n_var,
             width=6, font=("Microsoft YaHei UI", 9),
-            bg=self.INPUT_BG, relief=tk.SOLID,
-            borderwidth=1, highlightthickness=0,
+            bg=STYLE["INPUT_BG"], relief=tk.SOLID,
+            borderwidth=1, highlightthickness=0
         )
-        top_n_entry.pack(side=tk.LEFT, padx=(6, 0))
-
-        # 统计信息
-        self.stats_var = tk.StringVar(value="总词数: 0 | 独立词数: 0")
-        stats_label = tk.Label(
-            analysis_frame,
-            textvariable=self.stats_var,
+        entry.pack(side=tk.LEFT, padx=(8, 0))
+        self.btn_analyze = self._btn_primary(card, "开始分析", self._on_analyze)
+        self.btn_analyze.pack(fill=tk.X, pady=(2, 4))
+        self.stats_label = tk.Label(
+            card, text="总词数: 0 | 独立词: 0",
             font=("Microsoft YaHei UI", 8),
-            fg=self.TEXT_LIGHT,
-            bg=self.BG_LEFT,
-            anchor="w",
+            fg=STYLE["TEXT_MUTED"], bg=STYLE["LEFT_BG"],
+            anchor="w"
         )
-        stats_label.pack(fill=tk.X, pady=(0, 4))
+        self.stats_label.pack(fill=tk.X)
 
-        # --- 区块 3: 停用词管理 ---
-        self._create_section_label(scrollable_frame, "🚫 停用词管理")
-        stop_frame = tk.Frame(scrollable_frame, bg=self.BG_LEFT, padx=10)
-        stop_frame.pack(fill=tk.X)
-
-        stop_input_frame = tk.Frame(stop_frame, bg=self.BG_LEFT)
-        stop_input_frame.pack(fill=tk.X, pady=(2, 4))
+        # 3. 停用词
+        card = self._create_card(self.left_content, "🚫 停用词")
+        add_row = tk.Frame(card, bg=STYLE["LEFT_BG"])
+        add_row.pack(fill=tk.X, pady=(2, 4))
         tk.Label(
-            stop_input_frame, text="添加:", bg=self.BG_LEFT,
-            fg=self.TEXT_SECONDARY, font=("Microsoft YaHei UI", 9)
+            add_row, text="添加:",
+            font=("Microsoft YaHei UI", 9),
+            fg=STYLE["TEXT_SECONDARY"], bg=STYLE["LEFT_BG"]
         ).pack(side=tk.LEFT)
         self.stop_add_var = tk.StringVar()
-        stop_add_entry = tk.Entry(
-            stop_input_frame, textvariable=self.stop_add_var,
+        entry = tk.Entry(
+            add_row, textvariable=self.stop_add_var,
             font=("Microsoft YaHei UI", 9),
-            bg=self.INPUT_BG, relief=tk.SOLID,
-            borderwidth=1, highlightthickness=0,
+            bg=STYLE["INPUT_BG"], relief=tk.SOLID,
+            borderwidth=1, highlightthickness=0
         )
-        stop_add_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 4))
-        btn_add_stop = self._create_styled_button(
-            stop_input_frame, "+", self._on_add_stop_word, width=3
+        entry.pack(side=tk.LEFT, fill=X, expand=True, padx=(6, 4))
+        btn = self._btn_secondary(add_row, "+", self._on_add_stop, width=2)
+        btn.pack(side=tk.RIGHT)
+        self.stop_list = tk.Listbox(
+            card, height=5, font=("Microsoft YaHei UI", 9),
+            bg=STYLE["INPUT_BG"], fg=STYLE["TEXT_PRIMARY"],
+            selectbackground=STYLE["ACCENT_PRIMARY"],
+            selectforeground="white",
+            relief=tk.SOLID, borderwidth=1, highlightthickness=0
         )
-        btn_add_stop.pack(side=tk.RIGHT)
+        self.stop_list.pack(fill=tk.X, pady=(0, 4))
+        btn_row = tk.Frame(card, bg=STYLE["LEFT_BG"])
+        btn_row.pack(fill=tk.X)
+        self._btn_secondary(btn_row, "移除选中", self._on_remove_stop).pack(side=tk.LEFT, padx=(0, 6))
+        self._btn_secondary(btn_row, "恢复默认", self._on_reset_stops).pack(side=tk.LEFT)
 
-        # 自定义停用词列表显示
-        self.stop_listbox = tk.Listbox(
-            stop_frame, height=5,
-            font=("Microsoft YaHei UI", 9),
-            bg=self.INPUT_BG, fg=self.TEXT_PRIMARY,
-            selectbackground=self.ACCENT_PRIMARY,
-            selectforeground="#ffffff",
-            relief=tk.SOLID, borderwidth=1,
-            highlightthickness=0,
-        )
-        self.stop_listbox.pack(fill=tk.X, pady=(0, 2))
-
-        stop_btn_frame = tk.Frame(stop_frame, bg=self.BG_LEFT)
-        stop_btn_frame.pack(fill=tk.X, pady=(0, 4))
-        btn_remove_stop = self._create_styled_button(
-            stop_btn_frame, "移除选中", self._on_remove_stop_word
-        )
-        btn_remove_stop.pack(side=tk.LEFT, padx=(0, 4))
-        btn_reset_stop = self._create_styled_button(
-            stop_btn_frame, "恢复默认", self._on_reset_stop_words
-        )
-        btn_reset_stop.pack(side=tk.LEFT)
-
-        # --- 区块 4: 词云形状 ---
-        self._create_section_label(scrollable_frame, "⬡ 词云形状")
-        shape_frame = tk.Frame(scrollable_frame, bg=self.BG_LEFT, padx=10)
-        shape_frame.pack(fill=tk.X)
-
-        tk.Label(
-            shape_frame, text="预设形状:", bg=self.BG_LEFT,
-            fg=self.TEXT_SECONDARY, font=("Microsoft YaHei UI", 9)
-        ).pack(anchor="w")
-
+        # 4. 形状选择
+        card = self._create_card(self.left_content, "⬡ 词云形状")
         self.shape_var = tk.StringVar()
-        shape_combo = ttk.Combobox(
-            shape_frame, textvariable=self.shape_var,
-            values=list(SHAPE_GENERATORS.keys()),
-            state="readonly", font=("Microsoft YaHei UI", 9),
+        combo = ttk.Combobox(
+            card, textvariable=self.shape_var,
+            values=list(SHAPES.keys()),
+            state="readonly", font=("Microsoft YaHei UI", 9)
         )
-        shape_combo.pack(fill=tk.X, pady=(2, 4))
-        shape_combo.bind("<<ComboboxSelected>>", self._on_shape_changed)
-
-        tk.Label(
-            shape_frame, text="自定义形状 (导入图片):", bg=self.BG_LEFT,
-            fg=self.TEXT_SECONDARY, font=("Microsoft YaHei UI", 9)
-        ).pack(anchor="w")
-
-        mask_btn_frame = tk.Frame(shape_frame, bg=self.BG_LEFT)
-        mask_btn_frame.pack(fill=tk.X, pady=(2, 4))
-        btn_load_mask = self._create_styled_button(
-            mask_btn_frame, "导入形状图片", self._on_load_mask_image
-        )
-        btn_load_mask.pack(side=tk.LEFT, padx=(0, 4))
-        btn_load_color_img = self._create_styled_button(
-            mask_btn_frame, "导入彩色图片", self._on_load_color_image
-        )
-        btn_load_color_img.pack(side=tk.LEFT)
-
-        self.mask_info_var = tk.StringVar(value="")
-        mask_info_label = tk.Label(
-            shape_frame, textvariable=self.mask_info_var,
+        combo.pack(fill=tk.X, pady=(2, 6))
+        combo.bind("<<ComboboxSelected>>", self._on_shape_change)
+        btn_row = tk.Frame(card, bg=STYLE["LEFT_BG"])
+        btn_row.pack(fill=tk.X, pady=(0, 4))
+        self._btn_secondary(btn_row, "导入形状", self._on_import_mask).pack(side=tk.LEFT, padx=(0, 6))
+        self._btn_secondary(btn_row, "导入带色图片", self._on_import_colored).pack(side=tk.LEFT)
+        self.shape_info = tk.Label(
+            card, text="当前: 圆形",
             font=("Microsoft YaHei UI", 8),
-            fg=self.TEXT_LIGHT, bg=self.BG_LEFT, anchor="w",
+            fg=STYLE["TEXT_MUTED"], bg=STYLE["LEFT_BG"],
+            anchor="w"
         )
-        mask_info_label.pack(fill=tk.X, pady=(0, 4))
+        self.shape_info.pack(fill=tk.X)
 
-        # --- 区块 5: 颜色配置 ---
-        self._create_section_label(scrollable_frame, "🎨 颜色配置")
-        color_frame = tk.Frame(scrollable_frame, bg=self.BG_LEFT, padx=10)
-        color_frame.pack(fill=tk.X)
-
+        # 5. 颜色方案
+        card = self._create_card(self.left_content, "🎨 颜色方案")
         self.color_var = tk.StringVar()
-        color_combo = ttk.Combobox(
-            color_frame, textvariable=self.color_var,
-            values=list(PRESET_COLOR_SCHEMES.keys()),
-            state="readonly", font=("Microsoft YaHei UI", 9),
+        combo = ttk.Combobox(
+            card, textvariable=self.color_var,
+            values=list(PRESET_COLORS.keys()),
+            state="readonly", font=("Microsoft YaHei UI", 9)
         )
-        color_combo.pack(fill=tk.X, pady=(2, 4))
-        color_combo.bind("<<ComboboxSelected>>", self._on_color_changed)
-
-        # 自定义颜色
-        tk.Label(
-            color_frame, text="自定义颜色 (逗号分隔，#RRGGBB):", bg=self.BG_LEFT,
-            fg=self.TEXT_SECONDARY, font=("Microsoft YaHei UI", 9)
-        ).pack(anchor="w")
-
-        custom_color_frame = tk.Frame(color_frame, bg=self.BG_LEFT)
-        custom_color_frame.pack(fill=tk.X, pady=(2, 4))
+        combo.pack(fill=tk.X, pady=(2, 6))
+        combo.bind("<<ComboboxSelected>>", self._on_color_change)
         self.custom_color_var = tk.StringVar()
-        custom_color_entry = tk.Entry(
-            custom_color_frame, textvariable=self.custom_color_var,
+        tk.Label(
+            card, text="自定义颜色 (#RRGGBB 逗号分隔):",
             font=("Microsoft YaHei UI", 9),
-            bg=self.INPUT_BG, relief=tk.SOLID,
-            borderwidth=1, highlightthickness=0,
+            fg=STYLE["TEXT_SECONDARY"], bg=STYLE["LEFT_BG"],
+            anchor="w"
+        ).pack(fill=tk.X, pady=(0, 2))
+        custom_row = tk.Frame(card, bg=STYLE["LEFT_BG"])
+        custom_row.pack(fill=tk.X, pady=(0, 4))
+        entry = tk.Entry(
+            custom_row, textvariable=self.custom_color_var,
+            font=("Microsoft YaHei UI", 9),
+            bg=STYLE["INPUT_BG"], relief=tk.SOLID,
+            borderwidth=1, highlightthickness=0
         )
-        custom_color_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
-        btn_apply_custom = self._create_styled_button(
-            custom_color_frame, "应用", self._on_apply_custom_colors, width=6
-        )
-        btn_apply_custom.pack(side=tk.RIGHT)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
+        self._btn_secondary(custom_row, "应用", self._on_apply_custom, width=6).pack(side=tk.RIGHT)
 
-        # --- 区块 6: 生成与导出 ---
-        self._create_section_label(scrollable_frame, "📊 生成与导出")
-        export_frame = tk.Frame(scrollable_frame, bg=self.BG_LEFT, padx=10)
-        export_frame.pack(fill=tk.X)
-
-        self.btn_generate = self._create_styled_button(
-            export_frame, "生成词云", self._on_generate_wordcloud, accent=True
-        )
+        # 6. 生成导出
+        card = self._create_card(self.left_content, "🚀 生成导出")
+        self.progress = ttk.Progressbar(card, mode="indeterminate", length=320)
+        self.progress.pack(fill=tk.X, pady=(0, 6))
+        self.progress.pack_forget()
+        self.btn_generate = self._btn_primary(card, "生成词云", self._on_generate)
         self.btn_generate.pack(fill=tk.X, pady=(2, 4))
-
-        self.btn_export = self._create_styled_button(
-            export_frame, "导出词云图片 (PNG/JPG)", self._on_export_image
-        )
-        self.btn_export.pack(fill=tk.X, pady=(0, 6))
-
-        # 进度条
-        self.progress_var = tk.DoubleVar()
-        self.progress_bar = ttk.Progressbar(
-            export_frame, variable=self.progress_var,
-            mode="indeterminate", length=350,
-        )
+        self.btn_export = self._btn_secondary(card, "导出PNG/JPG", self._on_export)
+        self.btn_export.pack(fill=tk.X, pady=(0, 2))
 
         return left
 
-    # ============================================================
-    # 右侧显示面板
-    # ============================================================
     def _build_right_panel(self) -> tk.Frame:
-        """构建右侧显示面板（选项卡式）"""
-        right = tk.Frame(self.root, bg=self.BG_MAIN)
+        right = tk.Frame(self.root, bg=STYLE["RIGHT_BG"], padx=16, pady=12)
 
-        self.notebook = ttk.Notebook(right)
-        self.notebook.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+        # 上方 - 文本 + 词频统计（左右分栏）
+        top = tk.Frame(right, bg=STYLE["RIGHT_BG"])
+        top.pack(fill=tk.X, pady=(0, 12))
 
-        # Tab 1: 文本预览
-        self.tab_text = self._build_text_tab()
-        # Tab 2: 词频统计
-        self.tab_freq = self._build_frequency_tab()
-        # Tab 3: 词云预览
-        self.tab_cloud = self._build_cloud_tab()
+        # 文本区域（左侧）
+        text_card = self._create_right_card(top, "📝 原文预览", width_ratio=1)
+        self.text_view = scrolledtext.ScrolledText(
+            text_card,
+            font=("Microsoft YaHei UI", 9.5),
+            bg="#ffffff", fg=STYLE["TEXT_PRIMARY"],
+            wrap=tk.WORD, relief=tk.FLAT, borderwidth=1,
+            highlightthickness=0, padx=12, pady=10
+        )
+        self.text_view.pack(fill=tk.BOTH, expand=True)
+        self.text_info = tk.Label(
+            text_card, text=f"字符数: 0",
+            font=("Microsoft YaHei UI", 8),
+            fg=STYLE["TEXT_MUTED"], bg=STYLE["CARD_BG"],
+            anchor="w"
+        )
+        self.text_info.pack(fill=tk.X)
 
-        self.notebook.add(self.tab_text, text="  文本预览  ")
-        self.notebook.add(self.tab_freq, text="  词汇统计  ")
-        self.notebook.add(self.tab_cloud, text="  词云预览  ")
+        # 词频表格（右侧）
+        freq_card = self._create_right_card(top, "📊 词频统计", width_ratio=1)
+        columns = ("rank", "word", "count")
+        self.freq_table = ttk.Treeview(
+            freq_card, columns=columns, show="headings",
+            selectmode="browse", height=10
+        )
+        self.freq_table.heading("rank", text="序号")
+        self.freq_table.heading("word", text="词汇")
+        self.freq_table.heading("count", text="频次")
+        self.freq_table.column("rank", width=50, anchor="center")
+        self.freq_table.column("word", width=180, anchor="w")
+        self.freq_table.column("count", width=60, anchor="center")
+        tree_scroll = ttk.Scrollbar(freq_card, orient=tk.VERTICAL, command=self.freq_table.yview)
+        self.freq_table.configure(yscrollcommand=tree_scroll.set)
+        self.freq_table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.freq_info = tk.Label(
+            freq_card, text=f"共 0 个词汇",
+            font=("Microsoft YaHei UI", 8),
+            fg=STYLE["TEXT_MUTED"], bg=STYLE["CARD_BG"],
+            anchor="w"
+        )
+        self.freq_info.pack(fill=tk.X)
+
+        # 下方 - 词云预览
+        bottom_card = self._create_right_card(right, "🌌 词云预览", height=360)
+        self.cloud_canvas = tk.Canvas(
+            bottom_card,
+            bg=STYLE["CARD_BG"],
+            highlightthickness=0, relief=tk.FLAT,
+        )
+        self.cloud_canvas.pack(fill=tk.BOTH, expand=True)
+        self.cloud_info = tk.Label(
+            bottom_card, text="等待生成...",
+            font=("Microsoft YaHei UI", 8),
+            fg=STYLE["TEXT_MUTED"], bg=STYLE["CARD_BG"],
+            anchor="w"
+        )
+        self.cloud_info.pack(fill=tk.X)
 
         return right
 
-    def _build_text_tab(self) -> tk.Frame:
-        """文本预览选项卡"""
-        frame = tk.Frame(self.notebook, bg=self.BG_MAIN)
-
-        info_frame = tk.Frame(frame, bg=self.BG_MAIN, height=30)
-        info_frame.pack(fill=tk.X, padx=10, pady=(6, 2))
-        self.text_info_var = tk.StringVar(value="文本长度: 0 字符")
+    def _create_right_card(self, parent, title, width_ratio=None, height=None):
+        frame = tk.Frame(
+            parent, bg=STYLE["CARD_BG"],
+            relief=tk.SOLID, borderwidth=1,
+            highlightthickness=0
+        )
+        if width_ratio == 1:
+            frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
+        elif width_ratio == 2:
+            frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(8, 0))
+        else:
+            frame.pack(fill=tk.BOTH, expand=True, pady=(0, 0))
+        if height:
+            frame.configure(height=height)
+            frame.pack_propagate(False)
+        header = tk.Frame(frame, bg=STYLE["CARD_BG"], height=32)
+        header.pack(fill=tk.X, padx=12, pady=(4, 0))
         tk.Label(
-            info_frame, textvariable=self.text_info_var,
-            font=("Microsoft YaHei UI", 9),
-            fg=self.TEXT_LIGHT, bg=self.BG_MAIN,
+            header, text=title,
+            font=("Microsoft YaHei UI", 10, "bold"),
+            fg=STYLE["TEXT_PRIMARY"], bg=STYLE["CARD_BG"],
         ).pack(side=tk.LEFT)
+        container = tk.Frame(frame, bg=STYLE["CARD_BG"])
+        container.pack(fill=tk.BOTH, expand=True, padx=8, pady=(2, 8))
+        return container
 
-        text_container = tk.Frame(frame, bg=self.BG_MAIN)
-        text_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 8))
-
-        self.text_display = scrolledtext.ScrolledText(
-            text_container,
-            font=("Microsoft YaHei UI", 10),
-            bg=self.BG_MAIN,
-            fg=self.TEXT_PRIMARY,
-            wrap=tk.WORD,
-            relief=tk.FLAT,
-            borderwidth=1,
-            highlightthickness=0,
-            insertbackground=self.ACCENT_PRIMARY,
-        )
-        self.text_display.pack(fill=tk.BOTH, expand=True)
-
-        # 设置内边距
-        self.text_display.configure(padx=12, pady=10)
-
-        return frame
-
-    def _build_frequency_tab(self) -> tk.Frame:
-        """词频统计选项卡"""
-        frame = tk.Frame(self.notebook, bg=self.BG_MAIN)
-
-        info_frame = tk.Frame(frame, bg=self.BG_MAIN, height=30)
-        info_frame.pack(fill=tk.X, padx=10, pady=(6, 2))
-        self.freq_info_var = tk.StringVar(value="共 0 个词汇")
-        tk.Label(
-            info_frame, textvariable=self.freq_info_var,
-            font=("Microsoft YaHei UI", 9),
-            fg=self.TEXT_LIGHT, bg=self.BG_MAIN,
-        ).pack(side=tk.LEFT)
-
-        # Treeview 词频表
-        tree_container = tk.Frame(frame, bg=self.BORDER_COLOR)
-        tree_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 8))
-
-        columns = ("rank", "word", "frequency")
-        self.freq_tree = ttk.Treeview(
-            tree_container, columns=columns,
-            show="headings", selectmode="browse",
-        )
-        self.freq_tree.heading("rank", text="序号")
-        self.freq_tree.heading("word", text="词汇")
-        self.freq_tree.heading("frequency", text="频次")
-
-        self.freq_tree.column("rank", width=60, anchor="center")
-        self.freq_tree.column("word", width=320, anchor="w")
-        self.freq_tree.column("frequency", width=80, anchor="center")
-
-        # 滚动条
-        tree_scrollbar = ttk.Scrollbar(
-            tree_container, orient=tk.VERTICAL,
-            command=self.freq_tree.yview,
-        )
-        self.freq_tree.configure(yscrollcommand=tree_scrollbar.set)
-
-        self.freq_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # 行颜色交替
-        self.freq_tree.tag_configure("even", background=self.TABLE_ROW_ALT)
-        self.freq_tree.tag_configure("odd", background=self.TABLE_BG)
-
-        return frame
-
-    def _build_cloud_tab(self) -> tk.Frame:
-        """词云预览选项卡"""
-        frame = tk.Frame(self.notebook, bg=self.BG_MAIN)
-
-        info_frame = tk.Frame(frame, bg=self.BG_MAIN, height=30)
-        info_frame.pack(fill=tk.X, padx=10, pady=(6, 2))
-        self.cloud_info_var = tk.StringVar(value="尚未生成词云")
-        tk.Label(
-            info_frame, textvariable=self.cloud_info_var,
-            font=("Microsoft YaHei UI", 9),
-            fg=self.TEXT_LIGHT, bg=self.BG_MAIN,
-        ).pack(side=tk.LEFT)
-
-        # 词云显示画布
-        cloud_container = tk.Frame(frame, bg=self.BORDER_COLOR)
-        cloud_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 8))
-
-        self.cloud_canvas = tk.Canvas(
-            cloud_container,
-            bg=self.BG_MAIN,
-            highlightthickness=0,
-            relief=tk.FLAT,
-        )
-        self.cloud_canvas.pack(fill=tk.BOTH, expand=True)
-
-        return frame
-
-    def _build_status_bar(self) -> None:
-        """底部状态栏"""
-        status_frame = tk.Frame(self.root, bg=self.BG_TITLE, height=26)
-        status_frame.pack(fill=tk.X, side=tk.BOTTOM)
-        status_frame.pack_propagate(False)
-
-        self.status_var = tk.StringVar(value="就绪 - 等待操作...")
-        status_label = tk.Label(
-            status_frame,
-            textvariable=self.status_var,
+    def _build_status_bar(self):
+        bar = tk.Frame(self.root, bg=STYLE["BUTTON_BG"], height=28)
+        bar.pack(fill=tk.X, side=tk.BOTTOM)
+        bar.pack_propagate(False)
+        self.status_text = tk.StringVar(value="就绪")
+        label = tk.Label(
+            bar, textvariable=self.status_text,
             font=("Microsoft YaHei UI", 8),
-            fg="#8899aa",
-            bg=self.BG_TITLE,
-            anchor="w",
+            fg="#cbd5e1", bg=STYLE["BUTTON_BG"],
+            anchor="w"
         )
-        status_label.pack(side=tk.LEFT, fill=tk.X, padx=16, pady=3)
-
-        self.status_icon_var = tk.StringVar(value="●")
-        icon_label = tk.Label(
-            status_frame,
-            textvariable=self.status_icon_var,
+        label.pack(side=tk.LEFT, fill=tk.X, padx=20, pady=5)
+        self.status_dot = tk.Label(
+            bar, text="●",
             font=("Microsoft YaHei UI", 8),
-            fg="#4ecdc4",
-            bg=self.BG_TITLE,
+            fg="#10b981", bg=STYLE["BUTTON_BG"]
         )
-        icon_label.pack(side=tk.RIGHT, padx=16, pady=3)
+        self.status_dot.pack(side=tk.RIGHT, padx=20, pady=5)
 
-    # ============================================================
-    # 事件处理
-    # ============================================================
-    def _set_status(self, text: str, color: str = "#4ecdc4") -> None:
-        self.status_var.set(text)
-        self.status_icon_var.set("●")
+    def _set_status(self, text, color="#10b981"):
+        self.status_text.set(text)
+        self.status_dot.config(fg=color)
         self.root.update_idletasks()
 
-    def _show_welcome(self) -> None:
-        """显示欢迎信息"""
-        self.text_display.delete("1.0", tk.END)
-        welcome_msg = (
-            "欢迎使用 TextLens 文本分析系统\n"
-            "══════════════════════════════\n\n"
-            "操作步骤:\n"
-            "  1. 点击「打开文件」导入文本文件（支持 .txt / .docx / .pdf）\n"
-            "  2. 点击「开始分析」进行中文分词和词频统计\n"
-            "  3. 选择词云形状和颜色方案\n"
-            "  4. 点击「生成词云」查看可视化结果\n"
-            "  5. 点击「导出词云图片」保存结果\n\n"
-            "提示：\n"
-            "  · 可在「停用词管理」中添加或删除停用词\n"
-            "  · 支持导入图片作为自定义形状\n"
-            "  · 支持自定义颜色方案\n"
-        )
-        self.text_display.insert("1.0", welcome_msg)
-        self.text_display.configure(state=tk.NORMAL)
-
-    # --- 文件导入 ---
-    def _on_open_file(self) -> None:
-        file_path = filedialog.askopenfilename(
+    # ========================================
+    # 事件处理
+    # ========================================
+    def _on_open_file(self):
+        path = filedialog.askopenfilename(
             title="选择文本文件",
             filetypes=[
-                ("文本文件", "*.txt;*.docx;*.pdf"),
-                ("TXT 文件", "*.txt"),
+                ("支持格式", "*.txt *.docx *.pdf"),
+                ("文本文件", "*.txt"),
                 ("Word 文档", "*.docx"),
                 ("PDF 文件", "*.pdf"),
-                ("所有文件", "*.*"),
-            ],
+                ("所有文件", "*.*")
+            ]
         )
-        if not file_path:
+        if not path:
             return
-
-        self._set_status("正在导入文件...", "#f9ca24")
-        self.progress_bar.pack(fill=tk.X, pady=(0, 4))
-        self.progress_bar.start()
-
-        def _load():
+        self.progress.pack(fill=tk.X, pady=(0, 6))
+        self.progress.start()
+        self._set_status("正在读取文件...", "#f59e0b")
+        def _task():
             try:
-                text = self.analyzer.load_file(file_path)
-                self.current_file_path = file_path
-                self.file_path_var.set(os.path.basename(file_path))
-
-                self.root.after(0, lambda: self._on_file_loaded(text, file_path))
+                text = self.analyzer.load_file(path)
+                self.current_file = path
+                self.root.after(0, lambda: self._after_open(path, text))
             except Exception as e:
-                self.root.after(0, lambda: self._on_load_error(str(e)))
+                self.root.after(0, lambda: self._error("读取失败", str(e)))
+        threading.Thread(target=_task, daemon=True).start()
 
-        threading.Thread(target=_load, daemon=True).start()
-
-    def _on_file_loaded(self, text: str, file_path: str) -> None:
-        self.progress_bar.stop()
-        self.progress_bar.pack_forget()
-
-        # 显示文本预览
-        self.text_display.delete("1.0", tk.END)
-        preview_len = min(len(text), 10000)
-        self.text_display.insert("1.0", text[:preview_len])
+    def _after_open(self, path: str, text: str):
+        self.progress.stop()
+        self.progress.pack_forget()
+        self.file_label.config(text=os.path.basename(path))
+        self.text_view.delete(1.0, tk.END)
+        preview = text[:10000]
+        self.text_view.insert(1.0, preview)
         if len(text) > 10000:
-            self.text_display.insert(tk.END, f"\n\n... (文本过长，仅显示前 10000 字符，共 {len(text)} 字符)")
+            self.text_view.insert(tk.END, f"\n\n[...] 文本过长，仅显示前 10000 字符，总计 {len(text)} 字符")
+        self.text_info.config(text=f"字符数: {len(text)}")
+        self._set_status(f"已加载: {os.path.basename(path)}")
 
-        self.text_info_var.set(f"文本长度: {len(text)} 字符 | 文件: {os.path.basename(file_path)}")
-        self._set_status(f"文件导入成功: {os.path.basename(file_path)}")
-        self.notebook.select(self.tab_text)
-
-    def _on_load_error(self, error: str) -> None:
-        self.progress_bar.stop()
-        self.progress_bar.pack_forget()
-        messagebox.showerror("导入错误", f"文件导入失败：\n{error}")
-        self._set_status(f"导入失败: {error}", "#e94560")
-
-    def _on_clear_text(self) -> None:
+    def _on_clear(self):
         self.analyzer = TextAnalyzer()
-        self.generator = WordCloudGenerator()
-        self.current_file_path = None
-        self.file_path_var.set("未选择文件")
-        self.text_display.delete("1.0", tk.END)
-        self.text_info_var.set("文本长度: 0 字符")
-
-        # 清空词频表
-        for item in self.freq_tree.get_children():
-            self.freq_tree.delete(item)
-        self.freq_info_var.set("共 0 个词汇")
-        self.stats_var.set("总词数: 0 | 独立词数: 0")
-
-        # 清空词云
+        self.generator = WordCloudEngine()
+        self.current_file = None
+        self.file_label.config(text="未选择文件")
+        self.text_view.delete(1.0, tk.END)
+        self.text_info.config(text="字符数: 0")
+        for item in self.freq_table.get_children():
+            self.freq_table.delete(item)
+        self.freq_info.config(text="共 0 个词汇")
+        self.stats_label.config(text="总词数: 0 | 独立词: 0")
         self.cloud_canvas.delete("all")
-        self.cloud_info_var.set("尚未生成词云")
-        self.current_preview_image = None
-
-        # 恢复默认形状和颜色
+        self.cloud_info.config(text="等待生成...")
+        self.stop_list.delete(0, tk.END)
         self.generator.set_preset_shape("圆形")
-        self.generator.set_color_scheme("海洋蓝调")
-        self.mask_info_var.set("")
-        self._show_welcome()
-        self._set_status("已清空所有内容")
+        self.shape_var.set("圆形")
+        self.shape_info.config(text="当前: 圆形")
+        self.color_var.set("冰川蓝")
+        self.generator.current_colors = "冰川蓝"
+        self._set_status("已清空重置")
 
-    # --- 分析与分词 ---
-    def _on_analyze(self) -> None:
+    def _on_analyze(self):
         if not self.analyzer.raw_text:
             messagebox.showwarning("提示", "请先导入文本文件")
             return
-
-        self._set_status("正在进行中文分词和词频统计...", "#f9ca24")
-
-        def _analyze():
+        self.progress.pack(fill=tk.X, pady=(0, 6))
+        self.progress.start()
+        self._set_status("正在分词统计...", "#f59e0b")
+        def _task():
             try:
-                words = self.analyzer.segment()
-                freq = self.analyzer.get_word_frequency()
-                self.root.after(0, lambda: self._on_analysis_done(words, freq))
+                self.analyzer.process()
+                self.root.after(0, self._after_analyze)
             except Exception as e:
-                self.root.after(0, lambda: self._on_analysis_error(str(e)))
+                self.root.after(0, lambda: self._error("分词失败", str(e)))
+        threading.Thread(target=_task, daemon=True).start()
 
-        threading.Thread(target=_analyze, daemon=True).start()
-
-    def _on_analysis_done(self, words: List[str], freq: List[Tuple[str, int]]) -> None:
-        # 更新统计信息
-        self.stats_var.set(f"总词数: {self.analyzer.total_words} | 独立词数: {self.analyzer.unique_words}")
-
-        # 更新词频表
-        for item in self.freq_tree.get_children():
-            self.freq_tree.delete(item)
-
+    def _after_analyze(self):
+        self.progress.stop()
+        self.progress.pack_forget()
+        self.stats_label.config(text=f"总词数: {self.analyzer.total_words} | 独立词: {self.analyzer.unique_words}")
         try:
-            top_n = int(self.top_n_var.get())
+            n = int(self.top_n_var.get())
         except ValueError:
-            top_n = 100
+            n = 100
+        for item in self.freq_table.get_children():
+            self.freq_table.delete(item)
+        top = self.analyzer.get_top_words(n)
+        for idx, (word, cnt) in enumerate(top, 1):
+            tag = "even" if idx % 2 == 0 else "odd"
+            self.freq_table.insert("", tk.END, values=(idx, word, cnt), tags=(tag,))
+        self.freq_table.tag_configure("even", background="#f8fafc")
+        self.freq_info.config(text=f"显示前 {len(top)} / {self.analyzer.unique_words} 个词汇")
+        self._set_status(f"分析完成: {self.analyzer.total_words} 词")
+        self._refresh_stop_list()
 
-        display_freq = freq[:top_n]
-        for i, (word, count) in enumerate(display_freq):
-            tag = "even" if i % 2 == 0 else "odd"
-            self.freq_tree.insert("", tk.END, values=(i + 1, word, count), tags=(tag,))
-
-        self.freq_info_var.set(f"共 {len(freq)} 个词汇，显示前 {len(display_freq)} 个")
-        self._set_status(f"分析完成: {self.analyzer.total_words} 个词汇, {self.analyzer.unique_words} 个独立词")
-        self.notebook.select(self.tab_freq)
-
-    def _on_analysis_error(self, error: str) -> None:
-        messagebox.showerror("分析错误", f"分词失败：\n{error}")
-        self._set_status(f"分析失败: {error}", "#e94560")
-
-    # --- 停用词管理 ---
-    def _on_add_stop_word(self) -> None:
+    def _on_add_stop(self):
         word = self.stop_add_var.get().strip()
         if not word:
             return
-        self.analyzer.add_stop_words([word])
-        self._refresh_stop_list()
+        self.analyzer.add_custom_stops([word])
         self.stop_add_var.set("")
+        self._refresh_stop_list()
         self._set_status(f"已添加停用词: {word}")
 
-    def _on_remove_stop_word(self) -> None:
-        selection = self.stop_listbox.curselection()
-        if not selection:
-            messagebox.showwarning("提示", "请先选择要移除的停用词")
+    def _on_remove_stop(self):
+        sel = self.stop_list.curselection()
+        if not sel:
+            messagebox.showwarning("提示", "请选择要移除的停用词")
             return
-        words = [self.stop_listbox.get(idx) for idx in selection]
-        self.analyzer.remove_stop_words(words)
+        words = [self.stop_list.get(i) for i in sel]
+        self.analyzer.remove_custom_stops(words)
         self._refresh_stop_list()
-        self._set_status(f"已移除停用词: {', '.join(words)}")
+        self._set_status(f"已移除: {', '.join(words)}")
 
-    def _on_reset_stop_words(self) -> None:
-        self.analyzer = TextAnalyzer()
+    def _on_reset_stops(self):
+        self.analyzer.reset_stops()
         self._refresh_stop_list()
         self._set_status("已恢复默认停用词表")
 
-    def _refresh_stop_list(self) -> None:
-        self.stop_listbox.delete(0, tk.END)
-        for word in self.analyzer.get_custom_stop_words_list():
-            self.stop_listbox.insert(tk.END, word)
+    def _refresh_stop_list(self):
+        self.stop_list.delete(0, tk.END)
+        for w in sorted(self.analyzer.custom_stop_words):
+            self.stop_list.insert(tk.END, w)
 
-    # --- 形状选择 ---
-    def _on_shape_changed(self, event=None) -> None:
-        shape_name = self.shape_var.get()
-        try:
-            self.generator.set_preset_shape(shape_name)
-            self.mask_info_var.set(f"当前形状: {shape_name}")
-            self._set_status(f"已选择形状: {shape_name}")
-        except Exception as e:
-            messagebox.showerror("错误", str(e))
+    def _on_shape_change(self, e):
+        name = self.shape_var.get()
+        if name in SHAPES:
+            self.generator.set_preset_shape(name)
+            self.shape_info.config(text=f"当前: {name}")
+            self._set_status(f"已选择形状: {name}")
 
-    def _on_load_mask_image(self) -> None:
-        file_path = filedialog.askopenfilename(
-            title="选择形状图片（黑白轮廓效果最佳）",
-            filetypes=[
-                ("图片文件", "*.png;*.jpg;*.jpeg;*.bmp;*.gif"),
-                ("所有文件", "*.*"),
-            ],
+    def _on_import_mask(self):
+        path = filedialog.askopenfilename(
+            title="导入形状图片（黑白轮廓效果最佳）",
+            filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp *.gif"), ("所有", "*.*")]
         )
-        if not file_path:
+        if not path:
             return
         try:
-            self.generator.load_custom_mask(file_path)
-            self.mask_info_var.set(f"当前形状: 自定义 ({os.path.basename(file_path)})")
+            self.generator.load_mask_from_image(path)
             self.shape_var.set("自定义")
-            self._set_status(f"已加载自定义形状: {os.path.basename(file_path)}")
+            self.shape_info.config(text=f"当前: 自定义 - {os.path.basename(path)}")
+            self._set_status(f"已导入形状: {os.path.basename(path)}")
         except Exception as e:
-            messagebox.showerror("错误", f"加载形状图片失败：\n{e}")
+            self._error("导入失败", str(e))
 
-    def _on_load_color_image(self) -> None:
-        file_path = filedialog.askopenfilename(
-            title="选择彩色图片（将提取形状和颜色）",
-            filetypes=[
-                ("图片文件", "*.png;*.jpg;*.jpeg;*.bmp;*.gif"),
-                ("所有文件", "*.*"),
-            ],
+    def _on_import_colored(self):
+        path = filedialog.askopenfilename(
+            title="导入彩色图片（提取形状和颜色）",
+            filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp *.gif"), ("所有", "*.*")]
         )
-        if not file_path:
+        if not path:
             return
         try:
-            self.generator.load_custom_color_image(file_path)
-            self.mask_info_var.set(f"当前: 自定义彩色 ({os.path.basename(file_path)})")
-            self.shape_var.set("自定义图片")
-            self._set_status(f"已加载彩色图片: {os.path.basename(file_path)}")
+            self.generator.load_mask_and_colors(path)
+            self.shape_var.set("图片颜色")
+            self.shape_info.config(text=f"当前: {os.path.basename(path)} (带颜色)")
+            self._set_status(f"已导入带色图片: {os.path.basename(path)}")
         except Exception as e:
-            messagebox.showerror("错误", f"加载彩色图片失败：\n{e}")
+            self._error("导入失败", str(e))
 
-    # --- 颜色选择 ---
-    def _on_color_changed(self, event=None) -> None:
-        scheme_name = self.color_var.get()
-        self.generator.set_color_scheme(scheme_name)
-        self._set_status(f"已选择颜色方案: {scheme_name}")
+    def _on_color_change(self, e):
+        name = self.color_var.get()
+        self.generator.current_colors = name
+        self._set_status(f"已选择颜色: {name}")
 
-    def _on_apply_custom_colors(self) -> None:
-        raw = self.custom_color_var.get().strip()
-        if not raw:
+    def _on_apply_custom(self):
+        text = self.custom_color_var.get().strip()
+        if not text:
             messagebox.showwarning("提示", "请输入颜色值")
             return
-        colors = [c.strip() for c in raw.split(",") if c.strip()]
-        if not colors:
-            messagebox.showwarning("提示", "请输入有效的颜色值（#RRGGBB 格式，逗号分隔）")
-            return
-        # 验证颜色格式
+        colors = [c.strip() for c in text.split(",") if c.strip()]
         for c in colors:
             if not re.match(r'^#[0-9a-fA-F]{6}$', c):
-                messagebox.showwarning("颜色格式错误", f"无效的颜色值: {c}\n请使用 #RRGGBB 格式")
+                messagebox.showwarning("格式错误", f"无效颜色 {c}，请使用 #RRGGBB 格式")
                 return
-        self.generator.use_custom_colors(colors)
+        PRESET_COLORS["自定义"] = colors
+        self.generator.current_colors = "自定义"
         self.color_var.set("自定义")
-        self._set_status(f"已应用自定义颜色: {len(colors)} 种颜色")
+        self._set_status(f"已应用自定义颜色: {len(colors)} 种")
 
-    # --- 生成词云 ---
-    def _on_generate_wordcloud(self) -> None:
-        if not self.analyzer._word_freq:
-            messagebox.showwarning("提示", "请先导入文本并进行分析")
+    def _on_generate(self):
+        if self.analyzer.unique_words == 0:
+            messagebox.showwarning("提示", "请先导入文本并分析")
             return
-
-        self._set_status("正在生成词云，请稍候...", "#f9ca24")
-        self.progress_bar.pack(fill=tk.X, pady=(0, 4))
-        self.progress_bar.start()
-
-        def _generate():
+        if not self.generator.mask:
+            self.generator.set_preset_shape("圆形")
+        self.progress.pack(fill=tk.X, pady=(0, 6))
+        self.progress.start()
+        self._set_status("正在生成词云...", "#f59e0b")
+        def _task():
             try:
-                freq_dict = dict(self.analyzer.get_word_frequency(200))
-                wc = self.generator.generate(
-                    word_freq=freq_dict,
-                    width=800,
-                    height=600,
-                    background_color="white",
-                    max_words=200,
-                )
-                self.root.after(0, lambda: self._on_cloud_generated(wc))
+                freq_dict = dict(self.analyzer.get_top_words(200))
+                self.generator.generate(freq_dict, 800, 600, "white", 200)
+                self.root.after(0, self._after_generate)
             except Exception as e:
-                self.root.after(0, lambda: self._on_cloud_error(str(e)))
+                self.root.after(0, lambda: self._error("生成失败", str(e)))
+        threading.Thread(target=_task, daemon=True).start()
 
-        threading.Thread(target=_generate, daemon=True).start()
-
-    def _on_cloud_generated(self, wc: WordCloud) -> None:
-        self.progress_bar.stop()
-        self.progress_bar.pack_forget()
-
-        # 在画布上显示
-        img = wc.to_image()
-        self.current_preview_image = img
-
-        # 缩放以适应画布
+    def _after_generate(self):
+        self.progress.stop()
+        self.progress.pack_forget()
+        img = self.generator.to_image()
         canvas_w = self.cloud_canvas.winfo_width()
         canvas_h = self.cloud_canvas.winfo_height()
-
         if canvas_w < 100:
-            canvas_w = 750
-        if canvas_h < 100:
-            canvas_h = 550
-
-        img_w, img_h = img.size
-        ratio = min(canvas_w / img_w, canvas_h / img_h)
-        new_w, new_h = int(img_w * ratio), int(img_h * ratio)
-
-        # 使用 PIL 缩放
-        resized = img.resize((new_w, new_h), Image.LANCZOS)
-
-        # 转换为 PhotoImage
-        self._tk_image = self._pil_to_tk(resized)
-
-        # 更新画布
+            canvas_w, canvas_h = 700, 320
+        iw, ih = img.size
+        ratio = min(canvas_w / iw, canvas_h / ih)
+        new_w, new_h = int(iw * ratio), int(ih * ratio)
+        resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        self.tk_preview = self._pil_to_tk(resized)
         self.cloud_canvas.delete("all")
-        self.cloud_canvas.create_image(
-            canvas_w // 2, canvas_h // 2,
-            image=self._tk_image, anchor=tk.CENTER,
-        )
+        cx, cy = canvas_w // 2, canvas_h // 2
+        self.cloud_canvas.create_image(cx, cy, image=self.tk_preview, anchor=tk.CENTER)
+        shape = self.generator.current_shape or "默认"
+        colors = self.generator.current_colors or "默认"
+        self.cloud_info.config(text=f"形状: {shape} | 颜色: {colors} | 词汇数: {self.analyzer.unique_words}")
+        self._set_status("词云生成完成")
 
-        shape_name = self.generator._current_shape or "默认"
-        color_name = self.generator._current_color_scheme or "默认"
-        self.cloud_info_var.set(
-            f"词云已生成 | 形状: {shape_name} | 颜色: {color_name} | "
-            f"词汇数: {self.analyzer.unique_words}"
-        )
-        self._set_status("词云生成成功！")
-        self.notebook.select(self.tab_cloud)
-
-    def _on_cloud_error(self, error: str) -> None:
-        self.progress_bar.stop()
-        self.progress_bar.pack_forget()
-        messagebox.showerror("生成错误", f"词云生成失败：\n{error}")
-        self._set_status(f"生成失败: {error}", "#e94560")
-
-    # --- 导出图片 ---
-    def _on_export_image(self) -> None:
-        if self.generator.wordcloud_obj is None:
+    def _on_export(self):
+        if self.generator.wc is None:
             messagebox.showwarning("提示", "请先生成词云")
             return
-
-        file_path = filedialog.asksaveasfilename(
-            title="导出词云图片",
+        path = filedialog.asksaveasfilename(
+            title="导出词云",
             defaultextension=".png",
-            filetypes=[
-                ("PNG 图片", "*.png"),
-                ("JPEG 图片", "*.jpg;*.jpeg"),
-            ],
+            filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg *.jpeg")]
         )
-        if not file_path:
+        if not path:
             return
-
         try:
-            self.generator.export_image(file_path)
-            self._set_status(f"词云已导出: {os.path.basename(file_path)}")
-            messagebox.showinfo("导出成功", f"词云图片已保存至:\n{file_path}")
+            self.generator.save(path)
+            self._set_status(f"已导出: {os.path.basename(path)}")
+            messagebox.showinfo("导出成功", f"图片已保存到:\n{path}")
         except Exception as e:
-            messagebox.showerror("导出错误", f"导出失败：\n{e}")
+            self._error("导出失败", str(e))
 
-    # ============================================================
-    # 工具方法
-    # ============================================================
-    @staticmethod
-    def _pil_to_tk(image: Image.Image) -> tk.PhotoImage:
-        """将 PIL Image 转换为 Tkinter PhotoImage"""
-        from io import BytesIO
-        buf = BytesIO()
-        image.save(buf, format="PNG")
+    def _error(self, title, msg):
+        self.progress.stop()
+        self.progress.pack_forget()
+        messagebox.showerror(title, msg)
+        self._set_status(f"{title}: {msg}", "#ef4444")
+
+    def _pil_to_tk(self, img: Image.Image) -> tk.PhotoImage:
+        import io
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
         return tk.PhotoImage(data=buf.getvalue())
 
-    def run(self) -> None:
-        """启动应用程序"""
+    def run(self):
         self.root.mainloop()
 
-
-# ============================================================
-# 主入口
-# ============================================================
-def main():
-    """程序入口"""
-    # 检查依赖
+# ========================================
+# 入口
+# ========================================
+def check_deps():
     missing = []
     try:
         import jieba
@@ -1647,32 +1169,22 @@ def main():
         import numpy
     except ImportError:
         missing.append("numpy")
-    try:
-        import matplotlib
-    except ImportError:
-        missing.append("matplotlib")
-
     if missing:
-        print("缺少必要的依赖库，请运行以下命令安装：")
-        print(f"pip install {' '.join(missing)}")
-        print("\n或者一次性安装所有依赖：")
-        print("pip install jieba wordcloud pillow numpy matplotlib python-docx PyPDF2 pdfplumber")
+        print("=" * 60)
+        print("缺少依赖库，请先安装:")
+        print()
+        print("  pip install " + " ".join(missing))
+        print()
+        print("完整安装命令:")
+        print("  pip install jieba wordcloud pillow numpy python-docx PyPDF2 pdfplumber")
+        print("=" * 60)
         sys.exit(1)
 
-    # 对于 docx 和 PDF 支持库给出友好提示
-    try:
-        from docx import Document
-    except ImportError:
-        print("[提示] 如需导入 .docx 文件，请安装：pip install python-docx")
-    try:
-        from PyPDF2 import PdfReader
-    except ImportError:
-        print("[提示] 如需导入 .pdf 文件，请安装：pip install PyPDF2")
-        print("[提示] 为提高 PDF 提取质量，推荐同时安装：pip install pdfplumber")
-
-    app = TextAnalysisApp()
+def main():
+    check_deps()
+    root = tk.Tk()
+    app = TextAnalysisApp(root)
     app.run()
-
 
 if __name__ == "__main__":
     main()
